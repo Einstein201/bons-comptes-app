@@ -1,0 +1,74 @@
+name: CI - Les bons comptes
+
+on:
+  push:
+    branches: [ dev, main ]
+  pull_request:
+    branches: [ dev, main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: utilisateur
+          POSTGRES_PASSWORD: motdepasse
+          POSTGRES_DB: bons_comptes
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      # 1. Récupération du code source
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Configuration de l'environnement Node.js (version 22)
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      # 3. Installation des dépendances
+      - name: Install dependencies
+        run: npm ci
+
+      # 4. Validation du schéma Prisma
+      - name: Validate Prisma Schema
+        run: npx prisma validate
+        env:
+          DATABASE_URL: postgresql://utilisateur:motdepasse@localhost:5432/bons_comptes?schema=public
+
+      # 5. Génération du client Prisma
+      - name: Generate Prisma Client
+        run: npx prisma generate
+        env:
+          DATABASE_URL: postgresql://utilisateur:motdepasse@localhost:5432/bons_comptes?schema=public
+
+      # 6. Vérification du Linting
+      - name: Run Lint
+        run: npm run lint
+
+      # 7. Compilation du projet (Build NestJS)
+      - name: Run Build
+        run: npm run build
+
+      # 8. Exécution des tests unitaires
+      - name: Run Tests
+        run: npm test
+        env:
+          DATABASE_URL: postgresql://utilisateur:motdepasse@localhost:5432/bons_comptes?schema=public
+
+          # 9. Exécution des tests E2E
+      - name: Run E2E Tests
+        run: npm run test:e2e -- --runInBand
+        env:
+          DATABASE_URL: postgresql://utilisateur:motdepasse@localhost:5432/bons_comptes?schema=public
