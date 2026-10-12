@@ -1,6 +1,6 @@
 # Les Bons Comptes — Backend (NestJS + Prisma)
 
-Application full-stack de gestion et de partage de dépenses entre amis et portefeuilles partagés, développée dans le cadre du module **IFI**.
+Application full-stack de gestion et de partage de dépenses entre amis et portefeuilles partagés, développée dans le cadre du module **IF**.
 
 ---
 
@@ -18,7 +18,7 @@ Application full-stack de gestion et de partage de dépenses entre amis et porte
 
 Avant de commencer, assurez-vous d'avoir installé sur votre machine :
 
-- [Node.js](https://nodejs.org/) (v18+ recommandé)
+- [Node.js](https://nodejs.org/) (v22 recommandé ; v20 minimum)
 - [npm](https://www.npmjs.com/) (fourni avec Node.js)
 - [Git](https://git-scm.com/)
 
@@ -42,10 +42,10 @@ npm install
 
 ### 3. Configurer les variables d'environnement
 
-Créez un fichier `.env` à la racine du projet et ajoutez-y la chaîne de connexion à la base de données PostgreSQL partagée :
+Créez un fichier `.env` à la racine du projet et configurez les variables suivantes avec les paramètres de votre base de données PostgreSQL. Les valeurs ci-dessous sont des exemples fictifs :
 
 ```env
-DATABASE_URL="postgresql://utilisateur:motdepasse@hote:5432/bons_comptes?schema=public"
+DATABASE_URL="postgresql://utilisateur:motdepasse@localhost:5432/bons_comptes?schema=public"
 PORT=3000
 ```
 
@@ -53,6 +53,14 @@ PORT=3000
 
 ```bash
 npx prisma generate
+```
+
+### 5. Appliquer les migrations à la base de données
+
+Vérifiez que PostgreSQL est démarré et que `DATABASE_URL` pointe vers la base à initialiser, puis appliquez les migrations du projet :
+
+```bash
+npx prisma migrate deploy
 ```
 
 ---
@@ -72,7 +80,7 @@ L'application sera accessible à l'adresse : `http://localhost:3000`.
 
 ---
 
-## 👥 Équipe
+##  Équipe
 
 - Einstein
 - Phong Lan
