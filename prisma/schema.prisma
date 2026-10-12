@@ -1,0 +1,74 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String          @id @default(uuid())
+  email     String          @unique
+  name      String
+  password  String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  // Relations
+  wallets   WalletMember[]
+  expenses  Expense[]       @relation("PaidExpenses")
+  splits    ExpenseSplit[]
+}
+
+model Wallet {
+  id          String          @id @default(uuid())
+  title       String
+  description String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  // Relations
+  members     WalletMember[]
+  expenses    Expense[]
+}
+
+model WalletMember {
+  id       String   @id @default(uuid())
+  userId   String
+  walletId String
+  joinedAt DateTime @default(now())
+
+  // Relations
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet   Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, walletId])
+}
+
+model Expense {
+  id          String         @id @default(uuid())
+  title       String
+  amount      Float
+  paidById    String
+  walletId    String
+  createdAt   DateTime       @default(now())
+
+  // Relations
+  paidBy      User           @relation("PaidExpenses", fields: [paidById], references: [id])
+  wallet      Wallet         @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  splits      ExpenseSplit[]
+}
+
+model ExpenseSplit {
+  id        String   @id @default(uuid())
+  expenseId String
+  userId    String
+  amount    Float
+
+  // Relations
+  expense   Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([expenseId, userId])
+}
