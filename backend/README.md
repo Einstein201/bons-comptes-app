@@ -9,8 +9,9 @@ Application full-stack de gestion et de partage de dépenses entre amis et porte
 - **Framework backend :** NestJS (TypeScript, NodeNext)
 - **ORM :** Prisma ORM
 - **Base de données :** PostgreSQL (base de données partagée)
-- **Tests :** Jest
+- **Tests :** Vitest
 - **Gestionnaire de paquets :** npm
+- **Version minimale de Node.js :** 22.22.3
 
 ---
 
@@ -18,7 +19,7 @@ Application full-stack de gestion et de partage de dépenses entre amis et porte
 
 Avant de commencer, assurez-vous d'avoir installé sur votre machine :
 
-- [Node.js](https://nodejs.org/) (v22 recommandé ; v20 minimum)
+- [Node.js](https://nodejs.org/) (v22.22.3 ou plus récent)
 - [npm](https://www.npmjs.com/) (fourni avec Node.js)
 - [Git](https://git-scm.com/)
 
@@ -38,7 +39,7 @@ cd backend
 ### 2. Installer les dépendances
 
 ```bash
-npm install
+npm ci
 ```
 
 ### 3. Configurer les variables d'environnement
@@ -63,6 +64,10 @@ Vérifiez que PostgreSQL est démarré et que `DATABASE_URL` pointe vers la base
 ```bash
 npx prisma migrate deploy
 ```
+
+## API utilisateurs
+
+La route `POST /users` crée un compte. Elle attend un courriel valide, un nom de 1 à 100 caractères et un mot de passe d'au moins 8 caractères (maximum 72 octets pour le hachage bcrypt). Les propriétés inattendues sont rejetées.
 
 ---
 
