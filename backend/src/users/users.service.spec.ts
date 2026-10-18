@@ -1,5 +1,9 @@
+<<<<<<< HEAD
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
+=======
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+>>>>>>> e4d11c06876c169eb0ae7332967fd2faaf6f02fa
 import { PrismaService } from '../prisma/prisma.service.js';
 import { UsersService } from './users.service.js';
 
