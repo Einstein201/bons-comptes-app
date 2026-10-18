@@ -1,29 +1,26 @@
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, type INestApplication } from '@nestjs/common';
+import { compare } from 'bcryptjs';
+import { randomUUID } from 'node:crypto';
 import { Test, TestingModule } from '@nestjs/testing';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
-import { UsersController } from '../src/users/users.controller.js';
-import { UsersService } from '../src/users/users.service.js';
-import type { CreateUserInput } from '../src/users/users.service.js';
+import { AppModule } from '../src/app.module.js';
+import { PrismaService } from '../src/prisma/prisma.service.js';
 
-describe('UsersController (e2e)', () => {
-  let app: Awaited<ReturnType<TestingModule['createNestApplication']>>;
-  const usersService = {
-    create: vi.fn(),
-  };
+describe('User registration (e2e)', () => {
+  let app: INestApplication;
+  let prisma: PrismaService;
+  const emailPrefix = `uc01-${randomUUID()}`;
+  let nextEmailId = 0;
 
-  beforeEach(async () => {
-    usersService.create.mockReset();
-    usersService.create.mockResolvedValue({
-      id: 'user-123',
-      email: 'alice@example.com',
-      name: 'Alice',
-      createdAt: new Date('2026-01-01T00:00:00.000Z'),
-    });
+  function createTestEmail() {
+    nextEmailId += 1;
+    return `${emailPrefix}-${nextEmailId}@example.com`;
+  }
 
+  beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      controllers: [UsersController],
-      providers: [{ provide: UsersService, useValue: usersService }],
+      imports: [AppModule],
     }).compile();
 
     app = moduleFixture.createNestApplication();
@@ -35,70 +32,89 @@ describe('UsersController (e2e)', () => {
       }),
     );
     await app.init();
+    prisma = app.get(PrismaService);
   });
 
-  it('creates an account from a valid request', async () => {
-    const input: CreateUserInput = {
-      email: 'alice@example.com',
+  it('persists a user with a hashed password and does not return the password', async () => {
+    const input = {
+      email: createTestEmail(),
       name: 'Alice',
       password: 'motdepasse123',
     };
 
-    await request(app.getHttpServer())
+    const response = await request(app.getHttpServer())
       .post('/users')
       .send(input)
-      .expect(201)
-      .expect({
-        id: 'user-123',
-        email: 'alice@example.com',
-        name: 'Alice',
-        createdAt: '2026-01-01T00:00:00.000Z',
-      });
+      .expect(201);
 
-    expect(usersService.create).toHaveBeenCalledWith(input);
+    expect(response.body).toMatchObject({
+      email: input.email,
+      name: input.name,
+    });
+    expect(response.body).toHaveProperty('id');
+    expect(response.body).toHaveProperty('createdAt');
+    expect(response.body).not.toHaveProperty('password');
+
+    const persistedUser = await prisma.user.findUnique({
+      where: { email: input.email },
+    });
+    expect(persistedUser).not.toBeNull();
+
+    if (!persistedUser) {
+      throw new Error('The created user was not persisted.');
+    }
+
+    expect(persistedUser.password).not.toBe(input.password);
+    expect(await compare(input.password, persistedUser.password)).toBe(true);
   });
 
-  it('rejects an invalid email before calling the service', async () => {
+  it('rejects a duplicate email with HTTP 409', async () => {
+    const input = {
+      email: createTestEmail(),
+      name: 'Alice',
+      password: 'motdepasse123',
+    };
+
+    await request(app.getHttpServer()).post('/users').send(input).expect(201);
     await request(app.getHttpServer())
       .post('/users')
-      .send({
-        email: 'invalid-email',
-        name: 'Alice',
-        password: 'motdepasse123',
-      })
-      .expect(400);
-
-    expect(usersService.create).not.toHaveBeenCalled();
+      .send({ ...input, name: 'Alice Dupont' })
+      .expect(409);
   });
 
-  it('rejects passwords shorter than eight characters', async () => {
-    await request(app.getHttpServer())
-      .post('/users')
-      .send({
-        email: 'alice@example.com',
-        name: 'Alice',
-        password: 'short',
-      })
-      .expect(400);
-
-    expect(usersService.create).not.toHaveBeenCalled();
-  });
-
-  it('rejects unexpected properties', async () => {
-    await request(app.getHttpServer())
-      .post('/users')
-      .send({
+  it.each([
+    [
+      'invalid email',
+      { email: 'invalid-email', name: 'Alice', password: 'motdepasse123' },
+    ],
+    [
+      'missing name',
+      { email: 'alice@example.com', name: '', password: 'motdepasse123' },
+    ],
+    [
+      'short password',
+      { email: 'alice@example.com', name: 'Alice', password: 'short' },
+    ],
+    [
+      'unexpected property',
+      {
         email: 'alice@example.com',
         name: 'Alice',
         password: 'motdepasse123',
         isAdmin: true,
-      })
-      .expect(400);
-
-    expect(usersService.create).not.toHaveBeenCalled();
+      },
+    ],
+  ])('rejects a request with %s', async (_case, input) => {
+    await request(app.getHttpServer()).post('/users').send(input).expect(400);
   });
 
-  afterEach(async () => {
-    await app.close();
+  afterAll(async () => {
+    try {
+      await prisma.user.deleteMany({
+        where: { email: { startsWith: emailPrefix } },
+      });
+    } finally {
+      await app.close();
+    }
   });
 });
