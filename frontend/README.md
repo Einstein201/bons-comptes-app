@@ -4,7 +4,7 @@ Application web de **Les Bons Comptes**, construite avec Next.js, React et TypeS
 
 ## Prérequis
 
-- Node.js 22 ou plus récent
+- Node.js 22.22.3 ou plus récent
 - npm
 - Le backend NestJS et PostgreSQL si les fonctionnalités front-end doivent appeler l'API
 
@@ -13,7 +13,7 @@ Application web de **Les Bons Comptes**, construite avec Next.js, React et TypeS
 Depuis ce dossier (`frontend/`), installez les dépendances :
 
 ```bash
-npm install
+npm ci
 ```
 
 Créez le fichier local `.env.local` à partir du modèle :
