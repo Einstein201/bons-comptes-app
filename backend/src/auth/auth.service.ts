@@ -1,14 +1,14 @@
 
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service.js';
-import { LoginDto } from './login.dto.js';
+import { PrismaService } from '../prisma/prisma.service.js';
+import {LoginDto} from '../auth/dto/login.dto.js';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 @Injectable()
 export class AuthService {
 constructor(
     private readonly prisma: PrismaService,
-   
+
     private readonly jwtService: JwtService,
 
 ) {}
@@ -41,7 +41,12 @@ async login(dto: LoginDto, response: any) {
     });
 
     return { accessToken };
-  
+
 
 }
+
+async logout(response: any) {
+    response.clearCookie('refreshToken');
+    return { message: 'Logout successful' };
+  }
 }
