@@ -45,8 +45,11 @@ jobs:
           cache-dependency-path: backend/package-lock.json
 
       - name: Install backend dependencies
-        working-directory: .
-        run: npm ci --prefix backend
+        working-directory: ${{ github.workspace }}/backend
+        run: |
+          test -f package.json
+          test -f package-lock.json
+          npm ci
 
       - name: Validate Prisma schema
         run: npx prisma validate
