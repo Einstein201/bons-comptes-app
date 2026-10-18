@@ -46,6 +46,7 @@ describe('UsersService', () => {
       where: { email: input.email },
       select: { id: true },
     });
+
     expect(prisma.user.create).toHaveBeenCalledWith({
       data: {
         email: input.email,
