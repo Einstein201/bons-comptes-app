@@ -17,7 +17,7 @@ Dans un terminal, démarrez l'API :
 
 ```bash
 cd backend
-npm install
+npm ci
 npx prisma generate
 npm run start:dev
 ```
