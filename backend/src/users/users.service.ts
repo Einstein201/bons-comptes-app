@@ -43,7 +43,9 @@ export class UsersService {
       });
     } catch (error) {
       if (this.isEmailConflict(error)) {
-        throw new ConflictException('Cette adresse email est déjà utilisée.');
+        throw new ConflictException(
+          'Cette adresse email est déjà utilisée.',
+        );
       }
 
       throw error;
