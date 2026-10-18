@@ -21,8 +21,7 @@
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspectBrk",
-    "test:e2e": "vitest run --config ./vitest.e2e.config.ts",
-    "postinstall": "prisma skills sync || exit 0"
+    "test:e2e": "vitest run --config ./vitest.e2e.config.ts"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
