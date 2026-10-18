@@ -1,4 +1,5 @@
-import { jest } from '@jest/globals';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock } from 'vitest';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { UsersService } from './users.service.js';
 
@@ -6,16 +7,16 @@ describe('UsersService', () => {
   let usersService: UsersService;
   let prisma: {
     user: {
-      findUnique: jest.Mock;
-      create: jest.Mock;
+      findUnique: Mock;
+      create: Mock;
     };
   };
 
   beforeEach(() => {
     prisma = {
       user: {
-        findUnique: jest.fn(),
-        create: jest.fn(),
+        findUnique: vi.fn(),
+        create: vi.fn(),
       },
     };
 
