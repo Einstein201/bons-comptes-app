@@ -80,6 +80,7 @@ jobs:
         run: npm run test:e2e
         env:
           DATABASE_URL: postgresql://utilisateur:motdepasse@localhost:5432/bons_comptes?schema=public
+          JWT_SECRET: 'secret-reserve-aux-tests-ci'
 
   frontend:
     name: Frontend build and lint
