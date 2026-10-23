@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
@@ -13,7 +13,19 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: any) {
-    return { userId: payload.sub, username: payload.username };
+ validate(payload: unknown) {
+  if (
+    typeof payload !== 'object' ||
+    payload === null ||
+    !('sub' in payload) ||
+    typeof payload.sub !== 'string' ||
+    payload.sub.trim() === '' ||
+    !('tokenType' in payload) ||
+    payload.tokenType !== 'access'
+  ) {
+    throw new UnauthorizedException('Jeton invalide');
   }
+
+  return { userId: payload.sub };
+}
 }
