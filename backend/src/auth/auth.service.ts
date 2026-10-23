@@ -30,8 +30,15 @@ async login(dto: LoginDto, response: any) {
      throw new UnauthorizedException('Email ou mot de passe incorrect');
 
   }
-    const accessToken = this.jwtService.sign({ userId: user.id }, { expiresIn: '1h' });
-    const refreshToken = this.jwtService.sign({ userId: user.id }, { expiresIn: '7d' });
+    const accessToken = this.jwtService.sign(
+  { sub: user.id, tokenType: 'access' },
+  { expiresIn: '1h' },
+);
+
+const refreshToken = this.jwtService.sign(
+  { sub: user.id, tokenType: 'refresh' },
+  { expiresIn: '7d' },
+);
 
     response.cookie('refreshToken', refreshToken, {
       httpOnly: true,
