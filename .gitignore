@@ -159,3 +159,6 @@ node_modules/
 
 # Turbo Repo
 .turbo
+
+# Local PostgreSQL data
+/.local-postgres/

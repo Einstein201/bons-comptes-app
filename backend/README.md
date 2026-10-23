@@ -64,6 +64,23 @@ Vérifiez que PostgreSQL est démarré et que `DATABASE_URL` pointe vers la base
 ```bash
 npx prisma migrate deploy
 ```
+## JWT configuration
+
+Generate a JWT secret:
+
+```bash
+openssl rand -hex 32
+```
+
+Add the generated value to `backend/.env`:
+
+```env
+JWT_SECRET=your_generated_secret
+```
+
+The backend uses this secret to sign and verify JWTs.
+Do not commit `.env` or share the secret.
+
 
 ## API utilisateurs
 
