@@ -47,9 +47,11 @@ npm ci
 Créez un fichier `.env` dans le dossier `backend/` et configurez les variables suivantes avec les paramètres de votre base de données PostgreSQL. Les valeurs ci-dessous sont des exemples fictifs :
 
 ```env
-DATABASE_URL="postgresql://utilisateur:motdepasse@localhost:5432/bons_comptes?schema=public"
+DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/bons_comptes?schema=public"
 PORT=3000
 ```
+
+Le fichier `.env.example` contient une URL locale fictive pour démarrer; remplacez-la par la configuration de votre environnement.
 
 ### 4. Générer le client Prisma
 
@@ -64,6 +66,8 @@ Vérifiez que PostgreSQL est démarré et que `DATABASE_URL` pointe vers la base
 ```bash
 npx prisma migrate deploy
 ```
+
+La migration IF-3 convertit les montants historiques exprimés en unités monétaires en centimes (multiplication par 100, arrondi `numeric` PostgreSQL à l’entier le plus proche, les égalités étant arrondies en s’éloignant de zéro). Elle s’arrête avant toute modification si les anciennes tables `Wallet`, `Expense` ou `ExpenseSplit` contiennent des lignes, car les champs obligatoires de créateur et la date métier ne peuvent pas être reconstitués sûrement à partir du schéma précédent.
 
 ## API utilisateurs
 

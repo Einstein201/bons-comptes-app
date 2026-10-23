@@ -7,68 +7,104 @@ generator client {
   provider = "prisma-client-js"
 }
 
-model User {
-  id        String          @id @default(uuid())
-  email     String          @unique
-  name      String
-  password  String
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+enum WalletStatus {
+  OPEN
+  CLOSED
+}
 
-  // Relations
-  wallets   WalletMember[]
-  expenses  Expense[]       @relation("PaidExpenses")
-  splits    ExpenseSplit[]
+enum WalletMemberStatus {
+  INVITED
+  MEMBER
+}
+
+enum RepaymentStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+model User {
+  id                 String         @id @default(uuid())
+  email              String         @unique
+  name               String
+  password           String
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  walletMemberships  WalletMember[]
+  createdWallets     Wallet[]       @relation("WalletCreator")
+  paidExpenses       Expense[]      @relation("ExpensePayer")
+  createdExpenses    Expense[]      @relation("ExpenseCreator")
+  splits             ExpenseSplit[]
+  sentRepayments     Repayment[]    @relation("RepaymentSender")
+  receivedRepayments Repayment[]    @relation("RepaymentRecipient")
 }
 
 model Wallet {
-  id          String          @id @default(uuid())
+  id          String         @id @default(uuid())
   title       String
   description String?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-
-  // Relations
+  status      WalletStatus   @default(OPEN)
+  createdById String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  closedAt    DateTime?
+  createdBy   User           @relation("WalletCreator", fields: [createdById], references: [id], onDelete: Restrict)
   members     WalletMember[]
   expenses    Expense[]
+  repayments  Repayment[]
 }
 
 model WalletMember {
-  id       String   @id @default(uuid())
-  userId   String
-  walletId String
-  joinedAt DateTime @default(now())
+  id         String             @id @default(uuid())
+  walletId   String
+  userId     String
+  status     WalletMemberStatus @default(INVITED)
+  invitedAt  DateTime           @default(now())
+  acceptedAt DateTime?
+  user       User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wallet     Wallet             @relation(fields: [walletId], references: [id], onDelete: Cascade)
 
-  // Relations
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  wallet   Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, walletId])
+  @@unique([walletId, userId])
 }
 
 model Expense {
   id          String         @id @default(uuid())
-  title       String
-  amount      Float
-  paidById    String
   walletId    String
+  title       String
+  amount      Int
+  date        DateTime       @db.Date
   createdAt   DateTime       @default(now())
-
-  // Relations
-  paidBy      User           @relation("PaidExpenses", fields: [paidById], references: [id])
+  paidById    String
+  createdById String
   wallet      Wallet         @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  paidBy      User           @relation("ExpensePayer", fields: [paidById], references: [id], onDelete: Restrict)
+  createdBy   User           @relation("ExpenseCreator", fields: [createdById], references: [id], onDelete: Restrict)
   splits      ExpenseSplit[]
 }
 
 model ExpenseSplit {
-  id        String   @id @default(uuid())
+  id        String  @id @default(uuid())
   expenseId String
   userId    String
-  amount    Float
-
-  // Relations
-  expense   Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id])
+  amount    Int
+  expense   Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@unique([expenseId, userId])
+}
+
+model Repayment {
+  id         String          @id @default(uuid())
+  walletId   String
+  fromUserId String
+  toUserId   String
+  amount     Int
+  status     RepaymentStatus @default(PENDING)
+  createdAt  DateTime        @default(now())
+  paidAt     DateTime?
+  wallet     Wallet          @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  fromUser   User            @relation("RepaymentSender", fields: [fromUserId], references: [id], onDelete: Restrict)
+  toUser     User            @relation("RepaymentRecipient", fields: [toUserId], references: [id], onDelete: Restrict)
+
+  @@index([walletId, status])
 }
