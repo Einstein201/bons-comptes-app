@@ -47,6 +47,11 @@ ALTER TABLE "WalletMember"
     ADD COLUMN "status" "WalletMemberStatus" NOT NULL DEFAULT 'MEMBER',
     ADD COLUMN "invitedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
+ALTER TABLE "WalletMember"
+    ALTER COLUMN "acceptedAt" DROP NOT NULL,
+    ALTER COLUMN "acceptedAt" DROP DEFAULT,
+    ALTER COLUMN "status" SET DEFAULT 'INVITED';
+
 DROP INDEX "WalletMember_userId_walletId_key";
 CREATE UNIQUE INDEX "WalletMember_walletId_userId_key"
     ON "WalletMember"("walletId", "userId");
