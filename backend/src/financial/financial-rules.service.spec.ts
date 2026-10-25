@@ -82,6 +82,42 @@ describe('FinancialRulesService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('rejects zero and negative amounts', async () => {
+    await expect(
+      service.validateExpense({
+        walletId: 'wallet',
+        amount: 0,
+        paidById: 'payer',
+        createdById: 'creator',
+        splits: [],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    await expect(
+      service.validateExpense({
+        walletId: 'wallet',
+        amount: 100,
+        paidById: 'payer',
+        createdById: 'creator',
+        splits: [
+          { userId: 'member', amount: 200 },
+          { userId: 'payer', amount: -100 },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    await expect(
+      service.validateRepayment({
+        walletId: 'wallet',
+        fromUserId: 'from',
+        toUserId: 'to',
+        amount: -500,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
   it('rejects expense participants who are not accepted wallet members', async () => {
     findMany.mockResolvedValue([{ userId: 'payer' }]);
 
