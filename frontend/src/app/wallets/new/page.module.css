@@ -1,0 +1,43 @@
+.page {
+  width: min(800px, 100% - 32px);
+  margin-inline: auto;
+  padding-bottom: 72px;
+}
+
+.main {
+  padding-top: 48px;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  line-height: 16px;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 12px 0 0;
+  color: var(--color-text);
+  font-size: 37px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.subtitle {
+  margin: 12px 0 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.main > form {
+  margin-top: 27px;
+}
