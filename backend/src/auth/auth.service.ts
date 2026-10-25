@@ -28,23 +28,23 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto) {
-  const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
-  const isMatch = await this.verifyPassword(dto.password, user?.password ?? this.dummyHash);
+    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const isMatch = await this.verifyPassword(dto.password, user?.password ?? this.dummyHash);
 
-  if (!user || !isMatch) {
-    throw new UnauthorizedException(INVALID_CREDENTIALS);
+    if (!user || !isMatch) {
+      throw new UnauthorizedException(INVALID_CREDENTIALS);
+    }
+    return this.issueTokens(user.id);
   }
-  return this.issueTokens(user.id);
-}
 
-private verifyPassword(plain: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(plain, hash);
-}
+  private verifyPassword(plain: string, hash: string): Promise<boolean> {
+    return bcrypt.compare(plain, hash);
+  }
 
   async refresh(refreshToken: string | undefined) {
     if (!refreshToken) throw new UnauthorizedException('Refresh token manquant');
 
-    let payload: { sub: string; tokenType: string };
+    let payload: { sub?: unknown; tokenType?: unknown };
     try {
       payload = this.jwtService.verify(refreshToken, {
         secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
@@ -52,7 +52,11 @@ private verifyPassword(plain: string, hash: string): Promise<boolean> {
     } catch {
       throw new UnauthorizedException('Refresh token invalide ou expiré');
     }
-    if (payload.tokenType !== 'refresh') {
+    if (
+      payload.tokenType !== 'refresh' ||
+      typeof payload.sub !== 'string' ||
+      payload.sub.trim() === ''
+    ) {
       throw new UnauthorizedException('Refresh token invalide ou expiré');
     }
 
