@@ -74,9 +74,9 @@ export class FinancialRulesService {
   }
 
   private assertIntegerAmount(amount: number): void {
-    if (!Number.isSafeInteger(amount)) {
+    if (!Number.isSafeInteger(amount) || amount <= 0) {
       throw new BadRequestException(
-        'Les montants doivent être des nombres entiers de centimes.',
+        'Les montants doivent être des nombres entiers positifs de centimes.',
       );
     }
   }
