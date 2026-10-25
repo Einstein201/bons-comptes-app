@@ -6,7 +6,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../auth/authenticated-request.js';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { JwtAuthGuard } from '../auth/guards/auth.guard.js';
 import { CreateWalletDto } from './dto/create-wallet.dto.js';
 import { WalletsService } from './wallets.service.js';
 
