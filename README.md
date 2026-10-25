@@ -1,5 +1,7 @@
 # Les Bons Comptes
 
+[![CI - Les bons comptes](https://github.com/Einstein201/bons-comptes-app/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/Einstein201/bons-comptes-app/actions/workflows/ci.yml?query=branch%3Adev)
+
 Application de gestion et de partage des dépenses entre amis, développée dans le cadre du module IF.
 
 ## Architecture
