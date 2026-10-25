@@ -1,14 +1,9 @@
-import {
-  IsNotEmpty,
-  IsString,
-  Matches,
-  MaxLength,
-  ValidateIf,
-} from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsString, Matches, MaxLength, ValidateIf } from 'class-validator';
 
 export class CreateWalletDto {
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
-  @IsNotEmpty()
   @Matches(/\S/)
   @MaxLength(100)
   title: string;

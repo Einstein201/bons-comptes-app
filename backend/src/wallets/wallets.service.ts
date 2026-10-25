@@ -32,7 +32,6 @@ export class WalletsService {
           walletId: wallet.id,
           userId: creatorId,
           status: 'MEMBER',
-
           acceptedAt: new Date(),
         },
       });
