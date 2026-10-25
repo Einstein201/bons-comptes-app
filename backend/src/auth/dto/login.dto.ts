@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { IsByteLength, IsEmail, IsNotEmpty, IsString } from 'class-validator';
 
 export class LoginDto {
   @IsEmail()
@@ -6,6 +6,6 @@ export class LoginDto {
 
   @IsString()
   @IsNotEmpty()
-  @MaxLength(72)
+  @IsByteLength(1, 72)
   password: string;
 }

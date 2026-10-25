@@ -78,6 +78,8 @@ JWT_REFRESH_SECRET=your_generated_refresh_secret
 ```
 
 The backend uses this secret to sign and verify JWTs.
+
+Limite connue : les refresh tokens ne sont pas stockés côté serveur. `POST /auth/refresh` émet un nouveau jeton mais l'ancien reste valide jusqu'à son expiration (7 jours), et `POST /auth/logout` ne fait qu'effacer le cookie. La révocation (`jti`) est prévue dans un billet de suivi.
 Do not commit `.env` or share the secret.
 
 
