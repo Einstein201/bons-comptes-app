@@ -4,10 +4,11 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import bcrypt from 'bcryptjs';
+import type { Response } from 'express';
 
 import { AuthService } from './auth.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { REFRESH_COOKIE } from './auth.constants.js';
+import { REFRESH_COOKIE, REFRESH_MAX_AGE_MS } from './auth.constants.js';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -76,20 +77,29 @@ describe('AuthService', () => {
     expect(unknown.message).toBe(wrong.message);
   });
 
-  it('accepte une connexion correcte et renvoie les deux tokens', async () => {
-    prismaMock.user.findUnique.mockResolvedValue({
-      id: '1',
-      email: 'angela@gmail.com',
-      password: await bcrypt.hash('motdepassecorrect', 10),
-    });
-
-    await expect(
-      service.login({ email: 'angela@gmail.com', password: 'motdepassecorrect' }),
-    ).resolves.toEqual({
-      accessToken: 'fake-access-token',
-      refreshToken: 'fake-refresh-token',
-    });
+it('accepte une connexion correcte et renvoie les deux tokens', async () => {
+  prismaMock.user.findUnique.mockResolvedValue({
+    id: '1',
+    email: 'angela@gmail.com',
+    password: await bcrypt.hash('motdepassecorrect', 10),
   });
+
+  await expect(
+    service.login({ email: 'angela@gmail.com', password: 'motdepassecorrect' }),
+  ).resolves.toEqual({
+    accessToken: 'fake-access-token',
+    refreshToken: 'fake-refresh-token',
+  });
+
+  expect(jwtMock.sign).toHaveBeenCalledWith(
+    expect.objectContaining({ sub: '1', tokenType: 'access' }),
+    expect.objectContaining({ expiresIn: '1h' }),
+  );
+  expect(jwtMock.sign).toHaveBeenCalledWith(
+    expect.objectContaining({ sub: '1', tokenType: 'refresh' }),
+    expect.objectContaining({ expiresIn: '7d' }),
+  );
+});
 
   it('refresh : émet de nouveaux tokens pour un refresh token valide', async () => {
     jwtMock.verify.mockReturnValue({ sub: '1', tokenType: 'refresh' });
@@ -126,4 +136,16 @@ describe('AuthService', () => {
     expect(res.clearCookie).toHaveBeenCalledWith(REFRESH_COOKIE, expect.objectContaining({ path: '/auth' }));
     expect(result).toEqual({ message: 'Logout successful' });
   });
+it('setRefreshCookie pose un cookie httpOnly de 7 jours', () => {
+  const res = { cookie: vi.fn() };
+
+  service.setRefreshCookie(res as unknown as Response, 'tok');
+
+  expect(res.cookie).toHaveBeenCalledWith(
+    REFRESH_COOKIE,
+    'tok',
+    expect.objectContaining({ httpOnly: true, sameSite: 'strict', maxAge: REFRESH_MAX_AGE_MS }),
+  );
+});
+  
 });
