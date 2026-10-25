@@ -74,6 +74,7 @@ Add the generated value to `backend/.env`:
 
 ```env
 JWT_SECRET=your_generated_secret
+JWT_REFRESH_SECRET=your_generated_refresh_secret
 ```
 
 The backend uses this secret to sign and verify JWTs.
