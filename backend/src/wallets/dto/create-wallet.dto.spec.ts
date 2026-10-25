@@ -4,6 +4,12 @@ import { describe, expect, it } from 'vitest';
 import { CreateWalletDto } from './create-wallet.dto.js';
 
 describe('CreateWalletDto', () => {
+  const pipe = new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+  });
+
   it.each([
     ['missing title', {}],
     ['empty title', { title: '' }],
@@ -34,13 +40,25 @@ describe('CreateWalletDto', () => {
     await expect(validate(dto)).resolves.toEqual([]);
   });
 
-  it('rejects a null description through the global validation rules', async () => {
-    const pipe = new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    });
+  it('trims the title through the global validation rules', async () => {
+    await expect(
+      pipe.transform(
+        { title: '  Vacances  ' },
+        { type: 'body', metatype: CreateWalletDto },
+      ),
+    ).resolves.toMatchObject({ title: 'Vacances' });
+  });
 
+  it('rejects a whitespace-only title through the global validation rules', async () => {
+    await expect(
+      pipe.transform(
+        { title: '   ' },
+        { type: 'body', metatype: CreateWalletDto },
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('rejects a null description through the global validation rules', async () => {
     await expect(
       pipe.transform(
         { title: 'Wallet', description: null },
@@ -50,12 +68,6 @@ describe('CreateWalletDto', () => {
   });
 
   it('rejects properties outside the DTO through the global validation rules', async () => {
-    const pipe = new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    });
-
     await expect(
       pipe.transform(
         { title: 'Wallet', createdById: 'client-supplied-user' },
