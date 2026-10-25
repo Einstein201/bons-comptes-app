@@ -1,4 +1,4 @@
-export const REFRESH_COOKIE = 'refresh_token';
+export const REFRESH_COOKIE = 'refreshToken';
 export const refreshCookieBase = (isProd: boolean) => ({
   httpOnly: true,
   secure: isProd,

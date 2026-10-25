@@ -28,17 +28,18 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto) {
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+  const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+  const isMatch = await this.verifyPassword(dto.password, user?.password ?? this.dummyHash);
 
-    // On compare TOUJOURS, même si l'utilisateur n'existe pas
-    const hash = user?.password ?? this.dummyHash;
-    const isMatch = await bcrypt.compare(dto.password, hash);
-
-    if (!user || !isMatch) {
-      throw new UnauthorizedException(INVALID_CREDENTIALS);
-    }
-    return this.issueTokens(user.id);
+  if (!user || !isMatch) {
+    throw new UnauthorizedException(INVALID_CREDENTIALS);
   }
+  return this.issueTokens(user.id);
+}
+
+private verifyPassword(plain: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(plain, hash);
+}
 
   async refresh(refreshToken: string | undefined) {
     if (!refreshToken) throw new UnauthorizedException('Refresh token manquant');
