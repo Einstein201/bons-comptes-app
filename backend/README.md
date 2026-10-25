@@ -62,6 +62,26 @@ Dans votre fichier local `backend/.env` (non commité), configurez `DATABASE_URL
 Depuis `backend/`, générez le client avec `npx prisma generate`. Le responsable vérifie que la configuration cible `dev`, puis applique les migrations avec `npx prisma migrate deploy` et vérifie avec `npx prisma migrate status`. Ne lancez pas de migration sur `production`. IF-3 refuse volontairement les anciennes données de portefeuille ou de dépense, faute de créateur et de date métier fiables.
 
 
+## JWT configuration
+
+Generate a JWT secret:
+
+```bash
+openssl rand -hex 32
+```
+
+Add the generated value to `backend/.env`:
+
+```env
+JWT_SECRET=your_generated_secret
+JWT_REFRESH_SECRET=your_generated_refresh_secret
+```
+
+The backend uses this secret to sign and verify JWTs.
+
+Limite connue : les refresh tokens ne sont pas stockés côté serveur. `POST /auth/refresh` émet un nouveau jeton mais l'ancien reste valide jusqu'à son expiration (7 jours), et `POST /auth/logout` ne fait qu'effacer le cookie. La révocation (`jti`) est prévue dans un billet de suivi.
+Do not commit `.env` or share the secret.
+
 
 ## API utilisateurs
 
