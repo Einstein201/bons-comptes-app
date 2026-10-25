@@ -133,6 +133,36 @@ describe('FinancialRulesService', () => {
     expect(findMany).not.toHaveBeenCalled();
   });
 
+  it('rejects amounts above the PostgreSQL INTEGER limit', async () => {
+    await expect(
+      service.validateExpense({
+        walletId: 'wallet',
+        amount: 2_147_483_648,
+        paidById: 'payer',
+        createdById: 'creator',
+        splits: [{ userId: 'payer', amount: 2_147_483_648 }],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    await expect(
+      service.validateRepayment({
+        walletId: 'wallet',
+        fromUserId: 'from',
+        toUserId: 'to',
+        amount: 2_147_483_648,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    await expect(
+      service.validateRepayment({
+        walletId: 'wallet',
+        fromUserId: 'from',
+        toUserId: 'to',
+        amount: 2_147_483_647,
+      }),
+    ).resolves.toBeUndefined();
+  });
+
   it('rejects expense participants who are not accepted wallet members', async () => {
     findMany.mockResolvedValue([{ userId: 'payer' }]);
 

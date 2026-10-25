@@ -14,6 +14,7 @@ jobs:
     name: Backend build and test
     runs-on: ubuntu-latest
     env:
+      DATABASE_URL: ${{ format('{0}://{1}:{2}@localhost:5432/bons_comptes?schema=public', 'postgresql', 'utilisateur', 'motdepasse') }}
       DATABASE_URL_UNPOOLED: ${{ format('{0}://{1}:{2}@localhost:5432/bons_comptes?schema=public', 'postgresql', 'utilisateur', 'motdepasse') }}
 
     services:
