@@ -47,23 +47,21 @@ npm ci
 Créez un fichier `.env` dans le dossier `backend/` et configurez les variables suivantes avec les paramètres de votre base de données PostgreSQL. Les valeurs ci-dessous sont des exemples fictifs :
 
 ```env
-DATABASE_URL="postgresql://utilisateur:motdepasse@localhost:5432/bons_comptes?schema=public"
+DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/bons_comptes?schema=public"
 PORT=3000
 ```
 
-### 4. Générer le client Prisma
+Le fichier `.env.example` contient une URL locale fictive pour démarrer; remplacez-la par la configuration de votre environnement.
 
-```bash
-npx prisma generate
-```
+### Base partagée avec Neon
 
-### 5. Appliquer les migrations à la base de données
+Le groupe utilise la branche Neon `dev`; `production` est réservée à la production. Demandez au responsable du projet de vous inviter et de transmettre les URL de connexion par un canal privé. Ne partagez pas le compte propriétaire.
 
-Vérifiez que PostgreSQL est démarré et que `DATABASE_URL` pointe vers la base à initialiser, puis appliquez les migrations du projet :
+Dans votre fichier local `backend/.env` (non commité), configurez `DATABASE_URL` (connexion de l’application), `DATABASE_URL_UNPOOLED` (migrations Prisma), `NEON_BRANCH=dev`, `PORT` et `JWT_SECRET`. Ne partagez pas ces valeurs publiquement et utilisez uniquement des données fictives.
 
-```bash
-npx prisma migrate deploy
-```
+Depuis `backend/`, générez le client avec `npx prisma generate`. Le responsable vérifie que la configuration cible `dev`, puis applique les migrations avec `npx prisma migrate deploy` et vérifie avec `npx prisma migrate status`. Ne lancez pas de migration sur `production`. IF-3 refuse volontairement les anciennes données de portefeuille ou de dépense, faute de créateur et de date métier fiables.
+
+
 
 ## API utilisateurs
 
