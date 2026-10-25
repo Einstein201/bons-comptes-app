@@ -142,6 +142,34 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
+# Fichiers personnels de l'éditeur (le fichier partagé .vscode/mcp.json reste suivi)
+.vscode/*
+!.vscode/mcp.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Fichiers générés par le système d'exploitation
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Clés, certificats et identifiants : ne jamais les commiter
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Résultats de tests et rapports locaux
+test-results/
+playwright-report/
+
+# Charges utiles de test locales (elles contiennent des identifiants de test)
+*.local.json
+backend/login-*.json
+backend/register.json
+
 # Dossiers de configuration des assistants IA
 .claude/
 .cursor/
