@@ -6,6 +6,7 @@ import { FinancialModule } from './financial/financial.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { UsersModule } from './users/users.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { WalletsModule } from './wallets/wallets.module.js';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { AuthModule } from './auth/auth.module.js';
     UsersModule,
     AuthModule,
     FinancialModule,
+    WalletsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
