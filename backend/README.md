@@ -53,21 +53,15 @@ PORT=3000
 
 Le fichier `.env.example` contient une URL locale fictive pour démarrer; remplacez-la par la configuration de votre environnement.
 
-### 4. Générer le client Prisma
+### Base partagée avec Neon
 
-```bash
-npx prisma generate
-```
+Le groupe utilise la branche Neon `dev`; `production` est réservée à la production. Demandez au responsable du projet de vous inviter et de transmettre les URL de connexion par un canal privé. Ne partagez pas le compte propriétaire.
 
-### 5. Appliquer les migrations à la base de données
+Dans votre fichier local `backend/.env` (non commité), configurez `DATABASE_URL` (connexion de l’application), `DATABASE_URL_UNPOOLED` (migrations Prisma), `NEON_BRANCH=dev`, `PORT` et `JWT_SECRET`. Ne partagez pas ces valeurs publiquement et utilisez uniquement des données fictives.
 
-Vérifiez que PostgreSQL est démarré et que `DATABASE_URL` pointe vers la base à initialiser, puis appliquez les migrations du projet :
+Depuis `backend/`, générez le client avec `npx prisma generate`. Le responsable vérifie que la configuration cible `dev`, puis applique les migrations avec `npx prisma migrate deploy` et vérifie avec `npx prisma migrate status`. Ne lancez pas de migration sur `production`. IF-3 refuse volontairement les anciennes données de portefeuille ou de dépense, faute de créateur et de date métier fiables.
 
-```bash
-npx prisma migrate deploy
-```
 
-La migration IF-3 convertit les montants historiques exprimés en unités monétaires en centimes (multiplication par 100, arrondi `numeric` PostgreSQL à l’entier le plus proche, les égalités étant arrondies en s’éloignant de zéro). Elle s’arrête avant toute modification si les anciennes tables `Wallet`, `Expense` ou `ExpenseSplit` contiennent des lignes, car les champs obligatoires de créateur et la date métier ne peuvent pas être reconstitués sûrement à partir du schéma précédent.
 
 ## API utilisateurs
 
