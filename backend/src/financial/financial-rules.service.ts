@@ -22,6 +22,9 @@ export interface ValidateRepaymentInput {
   amount: number;
 }
 
+// Borne des colonnes Prisma Int / PostgreSQL INTEGER (32 bits signés).
+const MAX_AMOUNT_CENTS = 2_147_483_647;
+
 @Injectable()
 export class FinancialRulesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -40,8 +43,8 @@ export class FinancialRulesService {
     for (const split of input.splits) {
       this.assertIntegerAmount(split.amount, true);
       splitTotal += split.amount;
-      if (!Number.isSafeInteger(splitTotal)) {
-        throw new BadRequestException('Le total des parts dépasse la limite sûre.');
+      if (splitTotal > MAX_AMOUNT_CENTS) {
+        throw new BadRequestException('Le total des parts dépasse la limite autorisée.');
       }
     }
 
@@ -74,11 +77,21 @@ export class FinancialRulesService {
   }
 
   private assertIntegerAmount(amount: number, allowZero = false): void {
-    if (!Number.isSafeInteger(amount) || amount < 0 || (!allowZero && amount === 0)) {
+    if (
+      !Number.isSafeInteger(amount) ||
+      amount < 0 ||
+      (!allowZero && amount === 0)
+    ) {
       throw new BadRequestException(
         allowZero
           ? 'Les parts doivent être des nombres entiers de centimes supérieurs ou égaux à zéro.'
           : 'Les montants doivent être des nombres entiers positifs de centimes.',
+      );
+    }
+
+    if (amount > MAX_AMOUNT_CENTS) {
+      throw new BadRequestException(
+        `Les montants ne peuvent pas dépasser ${MAX_AMOUNT_CENTS} centimes.`,
       );
     }
   }
