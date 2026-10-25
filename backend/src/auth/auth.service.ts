@@ -63,7 +63,8 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
     if (!user) throw new UnauthorizedException('Refresh token invalide ou expiré');
 
-    return this.issueTokens(user.id); // rotation : nouveau refresh token
+    // Nouveau refresh token émis; l'ancien reste valide jusqu'à son expiration (pas de révocation côté serveur)
+    return this.issueTokens(user.id);
   }
 
   setRefreshCookie(res: Response, token: string) {

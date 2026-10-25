@@ -4,8 +4,8 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ConfigModule } from '@nestjs/config';
-import { AuthModule } from './auth.module.js';
-import { PrismaService } from '../prisma/prisma.service.js';
+import { AuthModule } from '../src/auth/auth.module.js';
+import { PrismaService } from '../src/prisma/prisma.service.js';
 
 @Global()
 @Module({
