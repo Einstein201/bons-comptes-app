@@ -1,0 +1,64 @@
+.row {
+  display: flex;
+  gap: 10px;
+}
+
+.row > input {
+  flex: 1;
+  min-width: 0;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 6px 0 12px;
+  border-radius: 999px;
+  background: var(--color-primary-tint);
+  color: var(--color-primary-ink);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.chipLabel {
+  overflow-wrap: anywhere;
+}
+
+.remove {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-chip-icon);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.remove:hover:not(:disabled) {
+  background: rgba(110, 49, 85, 0.12);
+  color: var(--color-primary-ink);
+}
+
+.remove:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.remove:disabled {
+  cursor: not-allowed;
+}
