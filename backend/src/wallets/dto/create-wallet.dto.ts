@@ -1,9 +1,9 @@
 import {
   IsNotEmpty,
-  IsOptional,
   IsString,
   Matches,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreateWalletDto {
@@ -13,7 +13,9 @@ export class CreateWalletDto {
   @MaxLength(100)
   title: string;
 
-  @IsOptional()
+  // Optionnelle : seule l'absence de la propriété (undefined) dispense de validation.
+  // @IsOptional() ignorerait aussi `null`, qui doit être refusé (HTTP 400).
+  @ValidateIf((_object, value) => value !== undefined)
   @IsString()
   description?: string;
 }
