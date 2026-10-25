@@ -38,7 +38,7 @@ export class FinancialRulesService {
 
     let splitTotal = 0;
     for (const split of input.splits) {
-      this.assertIntegerAmount(split.amount);
+      this.assertIntegerAmount(split.amount, true);
       splitTotal += split.amount;
       if (!Number.isSafeInteger(splitTotal)) {
         throw new BadRequestException('Le total des parts dépasse la limite sûre.');
@@ -73,10 +73,12 @@ export class FinancialRulesService {
     ]);
   }
 
-  private assertIntegerAmount(amount: number): void {
-    if (!Number.isSafeInteger(amount) || amount <= 0) {
+  private assertIntegerAmount(amount: number, allowZero = false): void {
+    if (!Number.isSafeInteger(amount) || amount < 0 || (!allowZero && amount === 0)) {
       throw new BadRequestException(
-        'Les montants doivent être des nombres entiers positifs de centimes.',
+        allowZero
+          ? 'Les parts doivent être des nombres entiers de centimes supérieurs ou égaux à zéro.'
+          : 'Les montants doivent être des nombres entiers positifs de centimes.',
       );
     }
   }

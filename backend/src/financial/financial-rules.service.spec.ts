@@ -82,6 +82,21 @@ describe('FinancialRulesService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('accepts a zero split for a member excluded from the expense', async () => {
+    await expect(
+      service.validateExpense({
+        walletId: 'wallet',
+        amount: 1000,
+        paidById: 'payer',
+        createdById: 'creator',
+        splits: [
+          { userId: 'payer', amount: 1000 },
+          { userId: 'member', amount: 0 },
+        ],
+      }),
+    ).resolves.toBeUndefined();
+  });
+
   it('rejects zero and negative amounts', async () => {
     await expect(
       service.validateExpense({
