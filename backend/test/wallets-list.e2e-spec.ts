@@ -48,6 +48,7 @@ describe('Wallet listing (e2e)', () => {
     createdById: string,
     createdAt: string,
     status: 'OPEN' | 'CLOSED' = 'OPEN',
+    updatedAt = createdAt,
   ) {
     await prisma.wallet.create({
       data: {
@@ -57,6 +58,7 @@ describe('Wallet listing (e2e)', () => {
         status,
         createdById,
         createdAt: at(createdAt),
+        updatedAt: at(updatedAt),
         closedAt: status === 'CLOSED' ? at(createdAt) : null,
       },
     });
@@ -130,11 +132,18 @@ describe('Wallet listing (e2e)', () => {
     nobody = await registerAndLogin('nobody');
 
     // Alice est membre de 5 porte-monnaies ouverts (o4a et o4b ont la même date) et de 3 clos.
-    await seedWallet('o1', alice.id, '2026-01-01T10:00:00.000Z');
+    // "o1" a été créé par Bob : Alice y est simple membre ; "o4b" a été mis à jour après sa création.
+    await seedWallet('o1', bob.id, '2026-01-01T10:00:00.000Z');
     await seedWallet('o2', alice.id, '2026-01-02T10:00:00.000Z');
     await seedWallet('o3', alice.id, '2026-01-03T10:00:00.000Z');
     await seedWallet('o4a', alice.id, '2026-01-04T10:00:00.000Z');
-    await seedWallet('o4b', alice.id, '2026-01-04T10:00:00.000Z');
+    await seedWallet(
+      'o4b',
+      alice.id,
+      '2026-01-04T10:00:00.000Z',
+      'OPEN',
+      '2026-01-10T10:00:00.000Z',
+    );
     await seedWallet('c1', alice.id, '2026-02-01T10:00:00.000Z', 'CLOSED');
     await seedWallet('c2', alice.id, '2026-02-02T10:00:00.000Z', 'CLOSED');
     await seedWallet('c3', alice.id, '2026-02-03T10:00:00.000Z', 'CLOSED');
@@ -150,7 +159,7 @@ describe('Wallet listing (e2e)', () => {
     await seedWallet('wi3', bob.id, '2026-06-01T10:00:00.000Z');
     await seedWallet('wi4', bob.id, '2026-06-01T10:00:00.000Z');
     await seedWallet('wic', bob.id, '2026-05-01T10:00:00.000Z', 'CLOSED');
-    for (const key of ['ob', 'wi1', 'wi2', 'wi3', 'wi4', 'wic']) {
+    for (const key of ['o1', 'ob', 'wi1', 'wi2', 'wi3', 'wi4', 'wic']) {
       await seedMembership(key, bob.id, 'MEMBER', '2026-01-01T00:00:00.000Z');
     }
     await seedMembership(
@@ -203,9 +212,9 @@ describe('Wallet listing (e2e)', () => {
       const response = await list(nobody).expect(200);
 
       expect(response.body).toEqual({
-        open: { items: [], nextCursor: null },
-        closed: { items: [], nextCursor: null },
-        invitations: { items: [], nextCursor: null },
+        open: { items: [], nextCursor: null, total: 0 },
+        closed: { items: [], nextCursor: null, total: 0 },
+        invitations: { items: [], nextCursor: null, total: 0 },
       });
     });
 
@@ -242,16 +251,24 @@ describe('Wallet listing (e2e)', () => {
       const walletFields = [
         'closedAt',
         'createdAt',
+        'creatorName',
         'description',
         'id',
+        'isCreator',
         'status',
         'title',
+        'updatedAt',
       ];
 
       expect(Object.keys(body).sort()).toEqual([
         'closed',
         'invitations',
         'open',
+      ]);
+      expect(Object.keys(body.open).sort()).toEqual([
+        'items',
+        'nextCursor',
+        'total',
       ]);
       expect(Object.keys(body.open.items[0]).sort()).toEqual(walletFields);
       expect(Object.keys(body.closed.items[0]).sort()).toEqual(walletFields);
@@ -264,6 +281,52 @@ describe('Wallet listing (e2e)', () => {
       expect(JSON.stringify(body)).not.toMatch(
         /password|token|createdById|userId|members|email/i,
       );
+    });
+
+    it('tells which wallets the caller created, and by whom', async () => {
+      const { body } = await list(alice).expect(200);
+      const byId = (key: string) =>
+        body.open.items.find((item: { id: string }) => item.id === id(key));
+
+      // Alice a créé o2, o3, o4a, o4b ; Bob a créé o1 (Alice n'y est que membre).
+      expect(byId('o4b')).toMatchObject({
+        isCreator: true,
+        creatorName: 'alice',
+      });
+      expect(byId('o2')).toMatchObject({
+        isCreator: true,
+        creatorName: 'alice',
+      });
+      expect(byId('o1')).toMatchObject({
+        isCreator: false,
+        creatorName: 'bob',
+      });
+      // Une invitation vient toujours d'un porte-monnaie créé par quelqu'un d'autre.
+      expect(body.invitations.items[0]).toMatchObject({
+        isCreator: false,
+        creatorName: 'bob',
+      });
+      // Le même porte-monnaie, vu par son créateur.
+      return list(bob)
+        .expect(200)
+        .then(({ body: bobBody }) => {
+          const o1 = bobBody.open.items.find(
+            (item: { id: string }) => item.id === id('o1'),
+          );
+          expect(o1).toMatchObject({ isCreator: true, creatorName: 'bob' });
+        });
+    });
+
+    it('exposes the last update of each wallet, which can differ from its creation', async () => {
+      const { body } = await list(alice).expect(200);
+      const o4b = body.open.items[0];
+
+      expect(o4b.id).toBe(id('o4b'));
+      expect(o4b.createdAt).toBe('2026-01-04T10:00:00.000Z');
+      expect(o4b.updatedAt).toBe('2026-01-10T10:00:00.000Z');
+      // Le tri reste fait sur la date de création, pas sur la dernière mise à jour.
+      expect(ids(body.open)[0]).toBe(id('o4b'));
+      expect(body.open.items[1].updatedAt).toBe(body.open.items[1].createdAt);
     });
 
     it('does not list an invited wallet as a joined one', async () => {
@@ -279,14 +342,19 @@ describe('Wallet listing (e2e)', () => {
     it("returns only the wallets associated with the caller's own account", async () => {
       const { body } = await list(bob).expect(200);
 
+      // "o1" est un porte-monnaie créé par Bob, dont Alice est aussi membre : Bob le voit, lui seul n'en voit pas d'autre d'Alice.
       expect(ids(body.open)).toEqual(
-        ['wi1', 'wi2', 'wi4', 'wi3', 'ob'].map(id),
+        ['wi1', 'wi2', 'wi4', 'wi3', 'ob', 'o1'].map(id),
       );
       expect(ids(body.closed)).toEqual([id('wic')]);
-      expect(body.invitations).toEqual({ items: [], nextCursor: null });
+      expect(body.invitations).toEqual({
+        items: [],
+        nextCursor: null,
+        total: 0,
+      });
 
       const everything = JSON.stringify(body);
-      for (const key of ['o1', 'o4a', 'c1', 'c3']) {
+      for (const key of ['o2', 'o4a', 'o4b', 'c1', 'c3']) {
         expect(everything).not.toContain(id(key));
       }
     });
@@ -299,6 +367,41 @@ describe('Wallet listing (e2e)', () => {
 
     it('refuses a user identifier supplied by the client', async () => {
       await list(alice, { userId: bob.id }).expect(400);
+    });
+  });
+
+  describe('totals', () => {
+    it('counts every wallet of each section, whatever the limit and the cursors', async () => {
+      const all = (await list(alice).expect(200)).body;
+      expect([all.open.total, all.closed.total, all.invitations.total]).toEqual(
+        [5, 3, 4],
+      );
+
+      const firstPage = (await list(alice, { limit: '2' }).expect(200)).body;
+      const nextPage = (
+        await list(alice, {
+          limit: '2',
+          openCursor: firstPage.open.nextCursor,
+          invitationsCursor: firstPage.invitations.nextCursor,
+        }).expect(200)
+      ).body;
+      for (const body of [firstPage, nextPage]) {
+        expect([
+          body.open.total,
+          body.closed.total,
+          body.invitations.total,
+        ]).toEqual([5, 3, 4]);
+      }
+    });
+
+    it("counts only the caller's own wallets", async () => {
+      const { body } = await list(bob).expect(200);
+
+      expect([
+        body.open.total,
+        body.closed.total,
+        body.invitations.total,
+      ]).toEqual([6, 1, 0]);
     });
   });
 
@@ -375,6 +478,7 @@ describe('Wallet listing (e2e)', () => {
 
       const byDefault = (await list(crowd).expect(200)).body;
       expect(byDefault.open.items).toHaveLength(20);
+      expect(byDefault.open.total).toBe(21);
       expect(byDefault.open.nextCursor).toEqual(expect.any(String));
 
       const maximum = (await list(crowd, { limit: '100' }).expect(200)).body;

@@ -6,6 +6,8 @@ export const MAX_PAGE_LIMIT = 100;
 export interface Page<T> {
   items: T[];
   nextCursor: string | null;
+  // Nombre total d'éléments de la section, indépendant de la limite et du curseur (compteurs des onglets).
+  total: number;
 }
 
 export interface DecodedCursor {
@@ -54,6 +56,7 @@ export function decodeCursor(cursor: string): DecodedCursor {
 export function toPage<Row, Item>(
   rows: Row[],
   limit: number,
+  total: number,
   toItem: (row: Row) => Item,
   toCursor: (row: Row) => string,
 ): Page<Item> {
@@ -63,5 +66,6 @@ export function toPage<Row, Item>(
   return {
     items: pageRows.map(toItem),
     nextCursor: hasNextPage ? toCursor(pageRows[pageRows.length - 1]) : null,
+    total,
   };
 }
