@@ -12,6 +12,7 @@ import type { AuthenticatedRequest } from '../auth/authenticated-request.js';
 import { JwtAuthGuard } from '../auth/guards/auth.guard.js';
 import { CreateWalletDto } from './dto/create-wallet.dto.js';
 import { GetWalletQueryDto } from './dto/get-wallet-query.dto.js';
+import { ListWalletsQueryDto } from './dto/list-wallets-query.dto.js';
 import { WalletsService } from './wallets.service.js';
 
 @Controller('wallets')
@@ -25,6 +26,14 @@ export class WalletsController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.walletsService.create(createWalletDto, request.user.userId);
+  }
+
+  @Get()
+  findAll(
+    @Query() query: ListWalletsQueryDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.walletsService.listForUser(request.user.userId, query);
   }
 
   @Get(':id')
