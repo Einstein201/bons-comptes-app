@@ -4,10 +4,10 @@ import { WalletsService } from './wallets.service.js';
 
 describe('WalletsController', () => {
   let controller: WalletsController;
-  let walletsService: { create: Mock };
+  let walletsService: { create: Mock; listForUser: Mock };
 
   beforeEach(() => {
-    walletsService = { create: vi.fn() };
+    walletsService = { create: vi.fn(), listForUser: vi.fn() };
     controller = new WalletsController(
       walletsService as unknown as WalletsService,
     );
@@ -42,5 +42,21 @@ describe('WalletsController', () => {
       { title: 'Wallet', createdById: 'attacker' },
       'user-123',
     );
+  });
+
+  it('lists the wallets of the authenticated user with the requested pagination', async () => {
+    const sections = { open: { items: [], nextCursor: null } };
+    walletsService.listForUser.mockResolvedValue(sections);
+
+    await expect(
+      controller.findAll(
+        { limit: 5 },
+        { user: { userId: 'user-123' } } as never,
+      ),
+    ).resolves.toBe(sections);
+
+    expect(walletsService.listForUser).toHaveBeenCalledWith('user-123', {
+      limit: 5,
+    });
   });
 });

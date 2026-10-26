@@ -87,6 +87,29 @@ Do not commit `.env` or share the secret.
 
 La route `POST /users` crée un compte. Elle attend un courriel valide, un nom de 1 à 100 caractères et un mot de passe d'au moins 8 caractères (maximum 72 octets pour le hachage bcrypt). Les propriétés inattendues sont rejetées.
 
+
+## API porte-monnaies
+
+`GET /wallets` (jeton d'accès requis, sinon 401) liste les porte-monnaies de l'utilisateur identifié par son jeton, jamais d'un identifiant fourni par le client. La réponse contient trois sections, chacune paginée indépendamment par curseur :
+
+- `open` : porte-monnaies ouverts dont l'utilisateur est membre, du plus récent au plus ancien (`createdAt`) ;
+- `closed` : porte-monnaies clos dont l'utilisateur est membre, triés de la même façon ;
+- `invitations` : invitations en attente vers un porte-monnaie ouvert, de la plus récente à la plus ancienne (`invitedAt`). Les invitations vers un porte-monnaie clos ne sont pas retournées.
+
+```json
+{
+  "open": { "items": [], "nextCursor": null },
+  "closed": { "items": [], "nextCursor": null },
+  "invitations": { "items": [], "nextCursor": null }
+}
+```
+
+Chaque élément expose `id`, `title`, `description`, `status`, `createdAt` et `closedAt` ; une invitation ajoute `invitedAt`.
+
+Paramètres de requête : `limit` (de 1 à 100, 20 par défaut, appliqué à chaque section) et un curseur par section : `openCursor`, `closedCursor`, `invitationsCursor`. Quand `nextCursor` n'est pas `null`, il se passe tel quel dans le paramètre de la section concernée pour obtenir la page suivante, sans modifier les autres sections. Un curseur invalide, une limite hors bornes ou un paramètre inattendu répondent 400.
+
+Une migration ajoute l'index `WalletMember(userId, status)` utilisé par ces requêtes.
+
 ---
 
 ##  Exécution de l'application
