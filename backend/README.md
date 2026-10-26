@@ -87,6 +87,36 @@ Do not commit `.env` or share the secret.
 
 La route `POST /users` crée un compte. Elle attend un courriel valide, un nom de 1 à 100 caractères et un mot de passe d'au moins 8 caractères (maximum 72 octets pour le hachage bcrypt). Les propriétés inattendues sont rejetées.
 
+
+## API porte-monnaies
+
+`GET /wallets` (jeton d'accès requis, sinon 401) liste les porte-monnaies de l'utilisateur identifié par son jeton, jamais d'un identifiant fourni par le client. La réponse contient trois sections, chacune paginée indépendamment par curseur :
+
+- `open` : porte-monnaies ouverts dont l'utilisateur est membre, du plus récent au plus ancien (`createdAt`) ;
+- `closed` : porte-monnaies clos dont l'utilisateur est membre, triés de la même façon ;
+- `invitations` : invitations en attente vers un porte-monnaie ouvert, de la plus récente à la plus ancienne (`invitedAt`). Les invitations vers un porte-monnaie clos ne sont pas retournées.
+
+```json
+{
+  "open": { "items": [], "nextCursor": null, "total": 0 },
+  "closed": { "items": [], "nextCursor": null, "total": 0 },
+  "invitations": { "items": [], "nextCursor": null, "total": 0 }
+}
+```
+
+`total` est le nombre de porte-monnaies de la section, quels que soient la limite et le curseur (compteurs des onglets, nombre de pages : `ceil(total / limit)`).
+
+Chaque élément expose `id`, `title`, `description`, `status`, `createdAt`, `updatedAt`, `closedAt`, `creatorName` (nom du créateur, jamais son courriel ni son identifiant) et `isCreator` ; une invitation ajoute `invitedAt`.
+
+- `isCreator` vaut `true` quand l'utilisateur est le créateur du porte-monnaie. Il sert à l'interface (afficher « Vous », montrer ou masquer les actions réservées au créateur : ajouter une dépense, demander un remboursement, répartir). Les droits restent vérifiés côté serveur par chaque route concernée : les autres membres ne peuvent que rembourser.
+- `updatedAt` est la date de la dernière action sur le porte-monnaie. Chaque action (ouverture, clôture, dépense, demande de remboursement, remboursement...) doit rafraîchir `Wallet.updatedAt` dans la même transaction : Prisma ne le fait seul que lorsque la ligne du porte-monnaie elle-même est modifiée.
+
+Paramètres de requête : `limit` (de 1 à 100, 20 par défaut, appliqué à chaque section) et un curseur par section : `openCursor`, `closedCursor`, `invitationsCursor`. Quand `nextCursor` n'est pas `null`, il se passe tel quel dans le paramètre de la section concernée pour obtenir la page suivante, sans modifier les autres sections. Un curseur invalide, une limite hors bornes ou un paramètre inattendu répondent 400.
+
+La pagination par curseur ne permet pas de sauter à une page donnée : l'interface propose « Précédent / Suivant » (elle garde les curseurs déjà parcourus) et peut afficher « Page 2 sur 3 » grâce à `total`.
+
+Une migration ajoute l'index `WalletMember(userId, status)` utilisé par ces requêtes.
+
 ---
 
 ##  Exécution de l'application
