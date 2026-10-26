@@ -100,7 +100,8 @@ describe('Wallet listing (e2e)', () => {
     let cursor: string | null = null;
 
     do {
-      const response = await list(user, {
+      // Annotation nécessaire : `cursor` dépend de `response` qui dépend de `cursor` (TS7022).
+      const response: request.Response = await list(user, {
         limit: String(limit),
         ...(cursor ? { [cursorParam]: cursor } : {}),
       }).expect(200);
