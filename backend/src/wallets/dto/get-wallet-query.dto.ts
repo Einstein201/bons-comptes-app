@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '../wallet-pagination.js';
 
 export class GetWalletQueryDto {
   @IsOptional()
@@ -10,6 +11,6 @@ export class GetWalletQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(100)
-  limit: number = 20;
+  @Max(MAX_PAGE_LIMIT)
+  limit: number = DEFAULT_PAGE_LIMIT;
 }
