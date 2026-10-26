@@ -47,11 +47,15 @@ export function MemberInvites({ emails, onChange, disabled }: MemberInvitesProps
     setError(undefined);
   }
 
-  // Entrée ajoute l'adresse au lieu de valider tout le formulaire.
+  // Entrée ajoute l'adresse au lieu de valider tout le formulaire, sauf pendant l'envoi :
+  // le champ n'est alors qu'en lecture seule et reçoit encore les touches.
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === 'Enter') {
       event.preventDefault();
-      addEmail();
+
+      if (!disabled) {
+        addEmail();
+      }
     }
   }
 
