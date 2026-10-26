@@ -4,10 +4,10 @@ import { WalletsService } from './wallets.service.js';
 
 describe('WalletsController', () => {
   let controller: WalletsController;
-  let walletsService: { create: Mock };
+  let walletsService: { create: Mock; findOne: Mock };
 
   beforeEach(() => {
-    walletsService = { create: vi.fn() };
+    walletsService = { create: vi.fn(), findOne: vi.fn() };
     controller = new WalletsController(
       walletsService as unknown as WalletsService,
     );
@@ -41,6 +41,27 @@ describe('WalletsController', () => {
     expect(walletsService.create).toHaveBeenCalledWith(
       { title: 'Wallet', createdById: 'attacker' },
       'user-123',
+    );
+  });
+
+
+  it('reads a wallet as the authenticated user', async () => {
+    const result = {
+      wallet: { id: 'wallet-123' },
+      members: { items: [], nextCursor: null },
+    };
+    walletsService.findOne.mockResolvedValue(result);
+
+    await expect(
+      controller.findOne('wallet-123', { limit: 20 }, {
+        user: { userId: 'user-123' },
+      } as never),
+    ).resolves.toEqual(result);
+
+    expect(walletsService.findOne).toHaveBeenCalledWith(
+      'wallet-123',
+      'user-123',
+      { limit: 20 },
     );
   });
 });

@@ -1,13 +1,17 @@
 import {
   Body,
   Controller,
+  Get,
+  Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../auth/authenticated-request.js';
 import { JwtAuthGuard } from '../auth/guards/auth.guard.js';
 import { CreateWalletDto } from './dto/create-wallet.dto.js';
+import { GetWalletQueryDto } from './dto/get-wallet-query.dto.js';
 import { WalletsService } from './wallets.service.js';
 
 @Controller('wallets')
@@ -21,5 +25,14 @@ export class WalletsController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.walletsService.create(createWalletDto, request.user.userId);
+  }
+
+  @Get(':id')
+  findOne(
+    @Param('id') id: string,
+    @Query() query: GetWalletQueryDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.walletsService.findOne(id, request.user.userId, query);
   }
 }
