@@ -4,10 +4,14 @@ import { WalletsService } from './wallets.service.js';
 
 describe('WalletsController', () => {
   let controller: WalletsController;
-  let walletsService: { create: Mock; findOne: Mock };
+  let walletsService: { create: Mock; findOne: Mock; listForUser: Mock };
 
   beforeEach(() => {
-    walletsService = { create: vi.fn(), findOne: vi.fn() };
+    walletsService = {
+      create: vi.fn(),
+      findOne: vi.fn(),
+      listForUser: vi.fn(),
+    };
     controller = new WalletsController(
       walletsService as unknown as WalletsService,
     );
@@ -18,10 +22,9 @@ describe('WalletsController', () => {
     walletsService.create.mockResolvedValue(wallet);
 
     await expect(
-      controller.create(
-        { title: 'Wallet', description: 'Description' },
-        { user: { userId: 'user-123' } } as never,
-      ),
+      controller.create({ title: 'Wallet', description: 'Description' }, {
+        user: { userId: 'user-123' },
+      } as never),
     ).resolves.toEqual(wallet);
 
     expect(walletsService.create).toHaveBeenCalledWith(
@@ -44,6 +47,20 @@ describe('WalletsController', () => {
     );
   });
 
+  it('lists the wallets of the authenticated user with the requested pagination', async () => {
+    const sections = { open: { items: [], nextCursor: null } };
+    walletsService.listForUser.mockResolvedValue(sections);
+
+    await expect(
+      controller.findAll({ limit: 5 }, {
+        user: { userId: 'user-123' },
+      } as never),
+    ).resolves.toBe(sections);
+
+    expect(walletsService.listForUser).toHaveBeenCalledWith('user-123', {
+      limit: 5,
+    });
+  });
 
   it('reads a wallet as the authenticated user', async () => {
     const result = {
