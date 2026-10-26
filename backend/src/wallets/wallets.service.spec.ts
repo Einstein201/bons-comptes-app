@@ -8,8 +8,8 @@ describe('WalletsService', () => {
   let walletsService: WalletsService;
   let prisma: {
     $transaction: Mock;
-    wallet: { findMany: Mock };
-    walletMember: { findMany: Mock };
+    wallet: { findMany: Mock; count: Mock };
+    walletMember: { findMany: Mock; count: Mock };
   };
   let transaction: {
     wallet: { create: Mock };
@@ -23,8 +23,14 @@ describe('WalletsService', () => {
     };
     prisma = {
       $transaction: vi.fn(async (callback) => callback(transaction)),
-      wallet: { findMany: vi.fn().mockResolvedValue([]) },
-      walletMember: { findMany: vi.fn().mockResolvedValue([]) },
+      wallet: {
+        findMany: vi.fn().mockResolvedValue([]),
+        count: vi.fn().mockResolvedValue(0),
+      },
+      walletMember: {
+        findMany: vi.fn().mockResolvedValue([]),
+        count: vi.fn().mockResolvedValue(0),
+      },
     };
     walletsService = new WalletsService(prisma as unknown as PrismaService);
   });
@@ -94,16 +100,32 @@ describe('WalletsService', () => {
       description: true,
       status: true,
       createdAt: true,
+      updatedAt: true,
       closedAt: true,
+      createdById: true,
+      createdBy: { select: { name: true } },
     };
-    const wallet = (id: string, createdAt: string, status = 'OPEN') => ({
+    // Ligne telle que la renvoie Prisma (avec le créateur) et élément tel que l'API l'expose.
+    const wallet = (
+      id: string,
+      createdAt: string,
+      status = 'OPEN',
+      createdById = 'creator-1',
+    ) => ({
       id,
       title: `Wallet ${id}`,
       description: null,
       status,
       createdAt: new Date(createdAt),
+      updatedAt: new Date(createdAt),
       closedAt: null,
+      createdById,
+      createdBy: { name: 'Élodie Laurent' },
     });
+    const exposed = (row: ReturnType<typeof wallet>, isCreator = false) => {
+      const { createdById: _createdById, createdBy, ...fields } = row;
+      return { ...fields, creatorName: createdBy.name, isCreator };
+    };
 
     it('queries each section with the given user and the default limit of 20', async () => {
       await walletsService.listForUser('user-123', {});
@@ -136,9 +158,9 @@ describe('WalletsService', () => {
     it('returns three empty sections when nothing is found', async () => {
       await expect(walletsService.listForUser('user-123', {})).resolves.toEqual(
         {
-          open: { items: [], nextCursor: null },
-          closed: { items: [], nextCursor: null },
-          invitations: { items: [], nextCursor: null },
+          open: { items: [], nextCursor: null, total: 0 },
+          closed: { items: [], nextCursor: null, total: 0 },
+          invitations: { items: [], nextCursor: null, total: 0 },
         },
       );
     });
@@ -163,9 +185,84 @@ describe('WalletsService', () => {
       expect(result.open.items.map((item) => item.id)).toEqual(['open-1']);
       expect(result.closed.items.map((item) => item.id)).toEqual(['closed-1']);
       expect(result.invitations.items).toEqual([
-        { ...wallet('invited-1', '2026-10-03T00:00:00.000Z'), invitedAt },
+        {
+          ...exposed(wallet('invited-1', '2026-10-03T00:00:00.000Z')),
+          invitedAt,
+        },
       ]);
       expect(result.invitations.items[0]).not.toHaveProperty('membership');
+    });
+
+    it('tells whether the caller created each wallet and names its creator, without exposing identifiers', async () => {
+      prisma.wallet.findMany.mockImplementation(async ({ where }) =>
+        where.status === 'OPEN'
+          ? [
+              wallet('mine', '2026-10-02T00:00:00.000Z', 'OPEN', 'user-123'),
+              wallet('theirs', '2026-10-01T00:00:00.000Z', 'OPEN', 'user-456'),
+            ]
+          : [],
+      );
+      prisma.walletMember.findMany.mockResolvedValue([
+        {
+          id: 'membership-1',
+          invitedAt: new Date('2026-10-20T08:00:00.000Z'),
+          wallet: wallet(
+            'invited',
+            '2026-10-03T00:00:00.000Z',
+            'OPEN',
+            'user-456',
+          ),
+        },
+      ]);
+
+      const { open, invitations } = await walletsService.listForUser(
+        'user-123',
+        {},
+      );
+
+      expect(open.items.map(({ id, isCreator }) => [id, isCreator])).toEqual([
+        ['mine', true],
+        ['theirs', false],
+      ]);
+      expect(open.items[0].creatorName).toBe('Élodie Laurent');
+      expect(invitations.items[0].isCreator).toBe(false);
+      for (const item of [...open.items, ...invitations.items]) {
+        expect(item).not.toHaveProperty('createdById');
+        expect(item).not.toHaveProperty('createdBy');
+      }
+    });
+
+    it('counts each section on its own filter, whatever the limit and the cursors', async () => {
+      prisma.wallet.count.mockImplementation(async ({ where }) =>
+        where.status === 'OPEN' ? 42 : 7,
+      );
+      prisma.walletMember.count.mockResolvedValue(3);
+      const date = new Date('2026-10-02T00:00:00.000Z');
+
+      const result = await walletsService.listForUser('user-123', {
+        limit: 2,
+        openCursor: encodeCursor(date, 'w-2'),
+        invitationsCursor: encodeCursor(date, 'm-2'),
+      });
+
+      expect(result.open.total).toBe(42);
+      expect(result.closed.total).toBe(7);
+      expect(result.invitations.total).toBe(3);
+      for (const status of ['OPEN', 'CLOSED']) {
+        expect(prisma.wallet.count).toHaveBeenCalledWith({
+          where: {
+            status,
+            members: { some: { userId: 'user-123', status: 'MEMBER' } },
+          },
+        });
+      }
+      expect(prisma.walletMember.count).toHaveBeenCalledWith({
+        where: {
+          userId: 'user-123',
+          status: 'INVITED',
+          wallet: { status: 'OPEN' },
+        },
+      });
     });
 
     it('applies the requested limit and exposes a cursor when another page exists', async () => {
@@ -253,6 +350,8 @@ describe('WalletsService', () => {
 
       expect(prisma.wallet.findMany).not.toHaveBeenCalled();
       expect(prisma.walletMember.findMany).not.toHaveBeenCalled();
+      expect(prisma.wallet.count).not.toHaveBeenCalled();
+      expect(prisma.walletMember.count).not.toHaveBeenCalled();
     });
   });
 });

@@ -19,11 +19,31 @@ const walletSelect = {
   createdAt: true,
 } satisfies Prisma.WalletSelect;
 
-// Seules les informations utiles à l'interface sont exposées : ni créateur, ni autres membres.
+// Seules les informations utiles à l'interface sont exposées : ni identifiant ou courriel du créateur, ni autres membres.
+// updatedAt = dernière action sur le porte-monnaie : chaque action (ouverture, clôture, dépense, remboursement...)
+// doit la rafraîchir dans la même transaction ; Prisma ne le fait seul que pour une modification du porte-monnaie lui-même.
 const walletListSelect = {
   ...walletSelect,
+  updatedAt: true,
   closedAt: true,
+  createdById: true,
+  createdBy: { select: { name: true } },
 } satisfies Prisma.WalletSelect;
+
+type WalletListRow = Prisma.WalletGetPayload<{
+  select: typeof walletListSelect;
+}>;
+
+// isCreator pilote l'interface (« Vous », actions réservées au créateur) ; les droits restent vérifiés côté serveur par chaque route concernée.
+function toWalletItem(wallet: WalletListRow, userId: string) {
+  const { createdById, createdBy, ...fields } = wallet;
+
+  return {
+    ...fields,
+    creatorName: createdBy.name,
+    isCreator: createdById === userId,
+  };
+}
 
 @Injectable()
 export class WalletsService {
@@ -83,26 +103,34 @@ export class WalletsService {
     limit: number,
     cursor: DecodedCursor | undefined,
   ) {
-    const wallets = await this.prisma.wallet.findMany({
-      where: {
-        status,
-        members: { some: { userId, status: 'MEMBER' } },
-        ...(cursor && {
-          OR: [
-            { createdAt: { lt: cursor.date } },
-            { createdAt: cursor.date, id: { lt: cursor.id } },
-          ],
-        }),
-      },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: limit + 1,
-      select: walletListSelect,
-    });
+    const memberOf = {
+      status,
+      members: { some: { userId, status: 'MEMBER' } },
+    } satisfies Prisma.WalletWhereInput;
+
+    const [wallets, total] = await Promise.all([
+      this.prisma.wallet.findMany({
+        where: {
+          ...memberOf,
+          ...(cursor && {
+            OR: [
+              { createdAt: { lt: cursor.date } },
+              { createdAt: cursor.date, id: { lt: cursor.id } },
+            ],
+          }),
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: limit + 1,
+        select: walletListSelect,
+      }),
+      this.prisma.wallet.count({ where: memberOf }),
+    ]);
 
     return toPage(
       wallets,
       limit,
-      (wallet) => wallet,
+      total,
+      (wallet) => toWalletItem(wallet, userId),
       (wallet) => encodeCursor(wallet.createdAt, wallet.id),
     );
   }
@@ -113,31 +141,42 @@ export class WalletsService {
     limit: number,
     cursor: DecodedCursor | undefined,
   ) {
-    const memberships = await this.prisma.walletMember.findMany({
-      where: {
-        userId,
-        status: 'INVITED',
-        wallet: { status: 'OPEN' },
-        ...(cursor && {
-          OR: [
-            { invitedAt: { lt: cursor.date } },
-            { invitedAt: cursor.date, id: { lt: cursor.id } },
-          ],
-        }),
-      },
-      orderBy: [{ invitedAt: 'desc' }, { id: 'desc' }],
-      take: limit + 1,
-      select: {
-        id: true,
-        invitedAt: true,
-        wallet: { select: walletListSelect },
-      },
-    });
+    const pending = {
+      userId,
+      status: 'INVITED',
+      wallet: { status: 'OPEN' },
+    } satisfies Prisma.WalletMemberWhereInput;
+
+    const [memberships, total] = await Promise.all([
+      this.prisma.walletMember.findMany({
+        where: {
+          ...pending,
+          ...(cursor && {
+            OR: [
+              { invitedAt: { lt: cursor.date } },
+              { invitedAt: cursor.date, id: { lt: cursor.id } },
+            ],
+          }),
+        },
+        orderBy: [{ invitedAt: 'desc' }, { id: 'desc' }],
+        take: limit + 1,
+        select: {
+          id: true,
+          invitedAt: true,
+          wallet: { select: walletListSelect },
+        },
+      }),
+      this.prisma.walletMember.count({ where: pending }),
+    ]);
 
     return toPage(
       memberships,
       limit,
-      ({ invitedAt, wallet }) => ({ ...wallet, invitedAt }),
+      total,
+      ({ invitedAt, wallet }) => ({
+        ...toWalletItem(wallet, userId),
+        invitedAt,
+      }),
       (membership) => encodeCursor(membership.invitedAt, membership.id),
     );
   }

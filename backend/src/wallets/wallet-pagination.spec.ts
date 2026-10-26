@@ -40,30 +40,38 @@ describe('toPage', () => {
   const toCursor = (row: string) => `cursor-${row}`;
 
   it('returns every row and no cursor when fewer rows than the limit were found', () => {
-    expect(toPage(rows, 5, (row) => row.toUpperCase(), toCursor)).toEqual({
+    expect(toPage(rows, 5, 3, (row) => row.toUpperCase(), toCursor)).toEqual({
       items: ['A', 'B', 'C'],
       nextCursor: null,
+      total: 3,
     });
   });
 
   it('returns no cursor when exactly as many rows as the limit were found', () => {
-    expect(toPage(rows, 3, (row) => row, toCursor)).toEqual({
+    expect(toPage(rows, 3, 3, (row) => row, toCursor)).toEqual({
       items: ['a', 'b', 'c'],
       nextCursor: null,
+      total: 3,
     });
   });
 
   it('drops the extra row and points the cursor to the last returned row', () => {
-    expect(toPage(rows, 2, (row) => row, toCursor)).toEqual({
+    expect(toPage(rows, 2, 3, (row) => row, toCursor)).toEqual({
       items: ['a', 'b'],
       nextCursor: 'cursor-b',
+      total: 3,
     });
   });
 
   it('handles an empty result', () => {
-    expect(toPage([], 20, (row) => row, toCursor)).toEqual({
+    expect(toPage([], 20, 0, (row) => row, toCursor)).toEqual({
       items: [],
       nextCursor: null,
+      total: 0,
     });
+  });
+
+  it('reports the total of the whole section, not the number of rows fetched', () => {
+    expect(toPage(rows, 2, 57, (row) => row, toCursor).total).toBe(57);
   });
 });
