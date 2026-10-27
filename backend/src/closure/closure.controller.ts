@@ -27,4 +27,12 @@ export class ClosureController {
   getBalance(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.closureService.getBalance(id, request.user.userId);
   }
+
+  @Get('optimized-payments')
+  getOptimizedPayments(
+    @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.closureService.getOptimizedPayments(id, request.user.userId);
+  }
 }

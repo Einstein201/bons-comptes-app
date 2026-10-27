@@ -232,3 +232,41 @@ describe('ClosureService.getBalance', () => {
     expect(prisma.expense.aggregate).not.toHaveBeenCalled();
   });
 });
+
+describe('ClosureService.getOptimizedPayments', () => {
+  let closureService: ClosureService;
+
+  beforeEach(() => {
+    closureService = new ClosureService({} as PrismaService);
+  });
+
+  it('returns the transfers computed by the balance', async () => {
+    const transfers = [
+      { fromUserId: 'user-b', toUserId: 'user-a', amount: 2500 },
+    ];
+    vi.spyOn(closureService, 'getBalance').mockResolvedValue({
+      walletId: 'wallet-1',
+      totalAmount: 5000,
+      balances: [],
+      transfers,
+    });
+
+    await expect(
+      closureService.getOptimizedPayments('wallet-1', 'user-a'),
+    ).resolves.toEqual({ walletId: 'wallet-1', transfers });
+    expect(closureService.getBalance).toHaveBeenCalledWith(
+      'wallet-1',
+      'user-a',
+    );
+  });
+
+  it('keeps the access rules of the balance', async () => {
+    vi.spyOn(closureService, 'getBalance').mockRejectedValue(
+      new ConflictException(),
+    );
+
+    await expect(
+      closureService.getOptimizedPayments('wallet-1', 'user-a'),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+});

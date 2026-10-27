@@ -132,4 +132,10 @@ export class ClosureService {
 
     return { walletId, totalAmount, balances, transfers };
   }
+
+  async getOptimizedPayments(walletId: string, userId: string) {
+    const { transfers } = await this.getBalance(walletId, userId);
+
+    return { walletId, transfers };
+  }
 }
