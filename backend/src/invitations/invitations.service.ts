@@ -28,57 +28,63 @@ const invitationSelect = {
 export class InvitationsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(
-    walletId: string,
-    dto: CreateInvitationDto,
-    creatorId: string,
-  ) {
-    const wallet = await this.prisma.wallet.findUnique({
-      where: { id: walletId },
-      select: { createdById: true, status: true },
-    });
-
-    if (!wallet) {
-      throw new NotFoundException('Porte-monnaie introuvable.');
-    }
-    if (wallet.createdById !== creatorId) {
-      throw new ForbiddenException('Seul le créateur peut inviter un utilisateur.');
-    }
-    if (wallet.status !== 'OPEN') {
-      throw new ConflictException('Ce porte-monnaie est fermé.');
-    }
-
-    const invitee = await this.prisma.user.findUnique({
-      where: { email: dto.email },
-      select: { id: true },
-    });
-    if (!invitee) {
-      throw new NotFoundException('Utilisateur introuvable.');
-    }
-    if (invitee.id === creatorId) {
-      throw new BadRequestException('Vous ne pouvez pas vous inviter vous-même.');
-    }
-
-    const existingMembership = await this.prisma.walletMember.findUnique({
-      where: { walletId_userId: { walletId, userId: invitee.id } },
-      select: { id: true },
-    });
-    if (existingMembership) {
-      throw new ConflictException('Cet utilisateur est déjà invité ou membre.');
-    }
-
+  async create(walletId: string, dto: CreateInvitationDto, creatorId: string) {
     try {
-      return await this.prisma.walletMember.create({
-        data: {
-          walletId,
-          userId: invitee.id,
-          status: 'INVITED',
-        },
-        select: invitationSelect,
+      return await this.prisma.$transaction(async (transaction) => {
+        const wallets = await transaction.$queryRaw<
+          { createdById: string; status: 'OPEN' | 'CLOSED' }[]
+        >`SELECT "createdById", "status" FROM "Wallet" WHERE "id" = ${walletId} FOR UPDATE`;
+        const wallet = wallets[0];
+
+        if (!wallet) {
+          throw new NotFoundException('Porte-monnaie introuvable.');
+        }
+        if (wallet.createdById !== creatorId) {
+          throw new ForbiddenException(
+            'Seul le créateur peut inviter un utilisateur.',
+          );
+        }
+        if (wallet.status !== 'OPEN') {
+          throw new ConflictException('Ce porte-monnaie est fermé.');
+        }
+
+        const invitee = await transaction.user.findUnique({
+          where: { email: dto.email },
+          select: { id: true },
+        });
+        if (!invitee) {
+          throw new NotFoundException('Utilisateur introuvable.');
+        }
+        if (invitee.id === creatorId) {
+          throw new BadRequestException(
+            'Vous ne pouvez pas vous inviter vous-même.',
+          );
+        }
+
+        const existingMembership = await transaction.walletMember.findUnique({
+          where: { walletId_userId: { walletId, userId: invitee.id } },
+          select: { id: true },
+        });
+        if (existingMembership) {
+          throw new ConflictException(
+            'Cet utilisateur est déjà invité ou membre.',
+          );
+        }
+
+        return transaction.walletMember.create({
+          data: {
+            walletId,
+            userId: invitee.id,
+            status: 'INVITED',
+          },
+          select: invitationSelect,
+        });
       });
     } catch (error) {
       if (this.isUniqueViolation(error)) {
-        throw new ConflictException('Cet utilisateur est déjà invité ou membre.');
+        throw new ConflictException(
+          'Cet utilisateur est déjà invité ou membre.',
+        );
       }
       throw error;
     }
@@ -120,14 +126,20 @@ export class InvitationsService {
   async accept(invitationId: string, inviteeId: string) {
     const invitation = await this.prisma.walletMember.findUnique({
       where: { id: invitationId },
-      select: { userId: true, status: true, wallet: { select: { status: true } } },
+      select: {
+        userId: true,
+        status: true,
+        wallet: { select: { status: true } },
+      },
     });
 
     if (!invitation) {
       throw new NotFoundException('Invitation introuvable.');
     }
     if (invitation.userId !== inviteeId) {
-      throw new ForbiddenException('Cette invitation appartient à un autre utilisateur.');
+      throw new ForbiddenException(
+        'Cette invitation appartient à un autre utilisateur.',
+      );
     }
     if (invitation.status !== 'INVITED') {
       throw new ConflictException('Cette invitation a déjà été traitée.');
@@ -150,7 +162,9 @@ export class InvitationsService {
     });
 
     if (result.count !== 1) {
-      throw new ConflictException('Cette invitation a déjà été traitée ou le porte-monnaie est fermé.');
+      throw new ConflictException(
+        'Cette invitation a déjà été traitée ou le porte-monnaie est fermé.',
+      );
     }
 
     return { id: invitationId, status: 'MEMBER' as const };
