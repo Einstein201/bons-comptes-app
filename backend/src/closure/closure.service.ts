@@ -7,6 +7,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { calculateBalances } from './balance-calculator.js';
+import { loadBalanceData } from './balance-data.js';
 
 const closedWalletSelect = {
   id: true,
@@ -85,44 +86,8 @@ export class ClosureService {
       );
     }
 
-    const [members, total, paidByUser, repayments] = await Promise.all([
-      this.prisma.walletMember.findMany({
-        where: { walletId, status: 'MEMBER' },
-        select: { userId: true, user: { select: { name: true } } },
-      }),
-      this.prisma.expense.aggregate({
-        where: { walletId },
-        _sum: { amount: true },
-      }),
-      this.prisma.expense.groupBy({
-        by: ['paidById'],
-        where: { walletId },
-        _sum: { amount: true },
-      }),
-      this.prisma.repayment.groupBy({
-        by: ['fromUserId', 'toUserId'],
-        where: { walletId, status: 'PAID' },
-        _sum: { amount: true },
-      }),
-    ]);
-
-    const totalAmount = total._sum.amount ?? 0;
-
-    const memberPayments = members.map((member) => {
-      const payments = paidByUser.find((row) => row.paidById === member.userId);
-
-      return {
-        userId: member.userId,
-        name: member.user.name,
-        paidAmount: payments?._sum.amount ?? 0,
-      };
-    });
-
-    const paidRepayments = repayments.map((row) => ({
-      fromUserId: row.fromUserId,
-      toUserId: row.toUserId,
-      amount: row._sum.amount ?? 0,
-    }));
+    const { totalAmount, memberPayments, paidRepayments } =
+      await loadBalanceData(this.prisma, walletId);
 
     const { balances, transfers } = calculateBalances(
       totalAmount,
