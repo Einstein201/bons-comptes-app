@@ -216,10 +216,7 @@ describe('IF-13 — contrat HTTP des invitations (UC04 et UC05)', () => {
     it.each(['invalid', 'expired', 'refresh'] as const)(
       'refuse un jeton %s sur les trois routes (401)',
       async (tokenType) => {
-        const invitation = await testFixtures().createMembership(
-          wallet.id,
-          invitee.id,
-        );
+        await testFixtures().createMembership(wallet.id, invitee.id);
         const tokens = {
           invalid: 'jeton-invalide',
           expired: jwt.sign(
@@ -253,9 +250,20 @@ describe('IF-13 — contrat HTTP des invitations (UC04 et UC05)', () => {
 
   describe('POST /wallets/:walletId/invitations', () => {
     it('crée une adhésion INVITED pour un compte existant (201)', async () => {
+      const oldUpdatedAt = new Date('2020-01-01T00:00:00.000Z');
+      await prisma.wallet.update({
+        where: { id: wallet.id },
+        data: { updatedAt: oldUpdatedAt },
+      });
+
       const response = await sendInvitation().expect(201);
 
       expectNoSecrets(response.body);
+      expect(
+        (
+          await prisma.wallet.findUniqueOrThrow({ where: { id: wallet.id } })
+        ).updatedAt.getTime(),
+      ).toBeGreaterThan(oldUpdatedAt.getTime());
       expect(await findMembership()).toMatchObject({
         id: expect.any(String),
         userId: invitee.id,
@@ -421,11 +429,8 @@ describe('IF-13 — contrat HTTP des invitations (UC04 et UC05)', () => {
       ]);
     });
 
-    it('conserve une invitation INVITED dans la liste après la clôture du portefeuille', async () => {
-      const invitation = await testFixtures().createMembership(
-        wallet.id,
-        invitee.id,
-      );
+    it('exclut une invitation INVITED après la clôture du portefeuille', async () => {
+      await testFixtures().createMembership(wallet.id, invitee.id);
       await prisma.wallet.update({
         where: { id: wallet.id },
         data: { status: 'CLOSED', closedAt: new Date() },
@@ -433,11 +438,7 @@ describe('IF-13 — contrat HTTP des invitations (UC04 et UC05)', () => {
 
       const response = await listInvitations().expect(200);
       const page = expectLastPage(response.body);
-      expect(page.data).toHaveLength(1);
-      expect(page.data[0]).toMatchObject({
-        id: invitation.id,
-        wallet: { status: 'CLOSED' },
-      });
+      expect(page.data).toEqual([]);
     });
 
     it('n’utilise jamais un userId fourni par le client pour changer le destinataire', async () => {
@@ -596,9 +597,20 @@ describe('IF-13 — contrat HTTP des invitations (UC04 et UC05)', () => {
         wallet.id,
         invitee.id,
       );
+      const oldUpdatedAt = new Date('2020-01-01T00:00:00.000Z');
+      await prisma.wallet.update({
+        where: { id: wallet.id },
+        data: { updatedAt: oldUpdatedAt },
+      });
+
       const response = await acceptInvitation(invitation.id).expect(200);
 
       expectNoSecrets(response.body);
+      expect(
+        (
+          await prisma.wallet.findUniqueOrThrow({ where: { id: wallet.id } })
+        ).updatedAt.getTime(),
+      ).toBeGreaterThan(oldUpdatedAt.getTime());
       const accepted = await findMembership();
       expect(accepted).toEqual({
         ...invitation,

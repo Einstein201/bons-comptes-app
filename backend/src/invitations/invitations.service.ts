@@ -71,7 +71,7 @@ export class InvitationsService {
           );
         }
 
-        return transaction.walletMember.create({
+        const invitation = await transaction.walletMember.create({
           data: {
             walletId,
             userId: invitee.id,
@@ -79,6 +79,13 @@ export class InvitationsService {
           },
           select: invitationSelect,
         });
+
+        await transaction.wallet.update({
+          where: { id: walletId },
+          data: { updatedAt: new Date() },
+        });
+
+        return invitation;
       });
     } catch (error) {
       if (this.isUniqueViolation(error)) {
@@ -95,6 +102,7 @@ export class InvitationsService {
     const where: Prisma.WalletMemberWhereInput = {
       userId,
       status: 'INVITED',
+      wallet: { status: 'OPEN' },
       ...(cursor && {
         OR: [
           { invitedAt: { lt: cursor.date } },
@@ -124,50 +132,59 @@ export class InvitationsService {
   }
 
   async accept(invitationId: string, inviteeId: string) {
-    const invitation = await this.prisma.walletMember.findUnique({
-      where: { id: invitationId },
-      select: {
-        userId: true,
-        status: true,
-        wallet: { select: { status: true } },
-      },
+    return this.prisma.$transaction(async (transaction) => {
+      const invitation = await transaction.walletMember.findUnique({
+        where: { id: invitationId },
+        select: { walletId: true, userId: true, status: true },
+      });
+
+      if (!invitation) {
+        throw new NotFoundException('Invitation introuvable.');
+      }
+      if (invitation.userId !== inviteeId) {
+        throw new ForbiddenException(
+          'Cette invitation appartient à un autre utilisateur.',
+        );
+      }
+
+      const wallets = await transaction.$queryRaw<
+        { status: 'OPEN' | 'CLOSED' }[]
+      >`SELECT "status" FROM "Wallet" WHERE "id" = ${invitation.walletId} FOR UPDATE`;
+      const wallet = wallets[0];
+
+      if (!wallet || wallet.status !== 'OPEN') {
+        throw new ConflictException('Ce porte-monnaie est fermé.');
+      }
+      if (invitation.status !== 'INVITED') {
+        throw new ConflictException('Cette invitation a déjà été traitée.');
+      }
+
+      const result = await transaction.walletMember.updateMany({
+        where: {
+          id: invitationId,
+          userId: inviteeId,
+          status: 'INVITED',
+          wallet: { status: 'OPEN' },
+        },
+        data: {
+          status: 'MEMBER',
+          acceptedAt: new Date(),
+        },
+      });
+
+      if (result.count !== 1) {
+        throw new ConflictException(
+          'Cette invitation a déjà été traitée ou le porte-monnaie est fermé.',
+        );
+      }
+
+      await transaction.wallet.update({
+        where: { id: invitation.walletId },
+        data: { updatedAt: new Date() },
+      });
+
+      return { id: invitationId, status: 'MEMBER' as const };
     });
-
-    if (!invitation) {
-      throw new NotFoundException('Invitation introuvable.');
-    }
-    if (invitation.userId !== inviteeId) {
-      throw new ForbiddenException(
-        'Cette invitation appartient à un autre utilisateur.',
-      );
-    }
-    if (invitation.status !== 'INVITED') {
-      throw new ConflictException('Cette invitation a déjà été traitée.');
-    }
-    if (invitation.wallet.status !== 'OPEN') {
-      throw new ConflictException('Ce porte-monnaie est fermé.');
-    }
-
-    const result = await this.prisma.walletMember.updateMany({
-      where: {
-        id: invitationId,
-        userId: inviteeId,
-        status: 'INVITED',
-        wallet: { status: 'OPEN' },
-      },
-      data: {
-        status: 'MEMBER',
-        acceptedAt: new Date(),
-      },
-    });
-
-    if (result.count !== 1) {
-      throw new ConflictException(
-        'Cette invitation a déjà été traitée ou le porte-monnaie est fermé.',
-      );
-    }
-
-    return { id: invitationId, status: 'MEMBER' as const };
   }
 
   private isUniqueViolation(error: unknown): boolean {
