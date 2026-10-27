@@ -1,3 +1,5 @@
+// Partagé par l'inscription et la connexion : le hachage factice de login doit avoir le même coût.
+export const BCRYPT_ROUNDS = 10;
 export const REFRESH_COOKIE = 'refreshToken';
 export const refreshCookieBase = (isProd: boolean) => ({
   httpOnly: true,

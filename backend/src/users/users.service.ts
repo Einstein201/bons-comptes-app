@@ -1,9 +1,8 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { hash } from 'bcryptjs';
+import { BCRYPT_ROUNDS } from '../auth/auth.constants.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-
-const SALT_ROUNDS = 10;
 
 export interface CreateUserInput {
   email: string;
@@ -25,7 +24,7 @@ export class UsersService {
       throw new ConflictException('Cette adresse email est déjà utilisée.');
     }
 
-    const password = await hash(createUserInput.password, SALT_ROUNDS);
+    const password = await hash(createUserInput.password, BCRYPT_ROUNDS);
 
     try {
       return await this.prisma.user.create({
