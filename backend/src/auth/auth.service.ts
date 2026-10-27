@@ -8,13 +8,13 @@ import type { Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { LoginDto } from './dto/login.dto.js';
 import {
+  BCRYPT_ROUNDS,
   REFRESH_COOKIE,
   REFRESH_MAX_AGE_MS,
   refreshCookieBase,
 } from './auth.constants.js';
 
 const INVALID_CREDENTIALS = 'Email ou mot de passe incorrect';
-const BCRYPT_ROUNDS = 10; // doit être le même qu'à l'inscription
 
 @Injectable()
 export class AuthService {
@@ -75,7 +75,7 @@ export class AuthService {
   }
 
   logout(res: Response) {
-    // Pas de maxAge ici : il empêcherait l'effacement sous Express 4
+    // Pas de maxAge ici : clearCookie fixe lui-même une expiration passée
     res.clearCookie(REFRESH_COOKIE, refreshCookieBase(process.env.NODE_ENV === 'production'));
     return { message: 'Logout successful' };
   }
