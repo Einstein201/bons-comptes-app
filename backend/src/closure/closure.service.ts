@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { calculateBalances } from './balance-calculator.js';
 
 const closedWalletSelect = {
   id: true,
@@ -57,5 +58,78 @@ export class ClosureService {
         select: closedWalletSelect,
       });
     });
+  }
+
+  async getBalance(walletId: string, userId: string) {
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { id: walletId },
+      select: { status: true },
+    });
+
+    if (!wallet) {
+      throw new NotFoundException('Porte-monnaie introuvable.');
+    }
+
+    const membership = await this.prisma.walletMember.findUnique({
+      where: { walletId_userId: { walletId, userId } },
+      select: { status: true },
+    });
+
+    if (membership?.status !== 'MEMBER') {
+      throw new ForbiddenException('Accès refusé à ce porte-monnaie.');
+    }
+
+    if (wallet.status !== 'CLOSED') {
+      throw new ConflictException(
+        'Le bilan n’est disponible que pour un porte-monnaie clôturé.',
+      );
+    }
+
+    const [members, total, paidByUser, repayments] = await Promise.all([
+      this.prisma.walletMember.findMany({
+        where: { walletId, status: 'MEMBER' },
+        select: { userId: true, user: { select: { name: true } } },
+      }),
+      this.prisma.expense.aggregate({
+        where: { walletId },
+        _sum: { amount: true },
+      }),
+      this.prisma.expense.groupBy({
+        by: ['paidById'],
+        where: { walletId },
+        _sum: { amount: true },
+      }),
+      this.prisma.repayment.groupBy({
+        by: ['fromUserId', 'toUserId'],
+        where: { walletId, status: 'PAID' },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    const totalAmount = total._sum.amount ?? 0;
+
+    const memberPayments = members.map((member) => {
+      const payments = paidByUser.find((row) => row.paidById === member.userId);
+
+      return {
+        userId: member.userId,
+        name: member.user.name,
+        paidAmount: payments?._sum.amount ?? 0,
+      };
+    });
+
+    const paidRepayments = repayments.map((row) => ({
+      fromUserId: row.fromUserId,
+      toUserId: row.toUserId,
+      amount: row._sum.amount ?? 0,
+    }));
+
+    const { balances, transfers } = calculateBalances(
+      totalAmount,
+      memberPayments,
+      paidRepayments,
+    );
+
+    return { walletId, totalAmount, balances, transfers };
   }
 }
