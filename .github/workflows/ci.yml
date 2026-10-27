@@ -82,6 +82,15 @@ jobs:
         run: npx prisma migrate deploy
         env:
           DATABASE_URL: ${{ format('{0}://{1}:{2}@localhost:5432/if13_test_invitations?schema=public', 'postgresql', 'utilisateur', 'motdepasse') }}
+          DATABASE_URL_UNPOOLED: ${{ format('{0}://{1}:{2}@localhost:5432/if13_test_invitations?schema=public', 'postgresql', 'utilisateur', 'motdepasse') }}
+
+      - name: Verify application database schema
+        run: |
+          PGPASSWORD=motdepasse psql \
+            -h localhost \
+            -U utilisateur \
+            -d bons_comptes \
+            -c 'SELECT to_regclass('"'"'public."User"'"'"'), to_regclass('"'"'public."Wallet"'"'"');'
 
       - name: Run lint
         run: npm run lint
