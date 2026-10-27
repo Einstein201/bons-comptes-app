@@ -117,6 +117,39 @@ export class ExpensesService {
     };
   }
 
+  async remove(walletId: string, expenseId: string, userId: string) {
+    await this.prisma.$transaction(async (transaction) => {
+      const expense = await transaction.expense.findFirst({
+        where: { id: expenseId, walletId },
+        select: {
+          paidById: true,
+          wallet: { select: { status: true } },
+        },
+      });
+
+      if (!expense) {
+        throw new NotFoundException('Dépense introuvable.');
+      }
+
+      if (expense.wallet.status !== 'OPEN') {
+        throw new ConflictException('Ce porte-monnaie est fermé.');
+      }
+
+      if (expense.paidById !== userId) {
+        throw new ForbiddenException(
+          'Seul le payeur peut supprimer cette dépense.',
+        );
+      }
+
+      await transaction.expense.delete({ where: { id: expenseId } });
+
+      await transaction.wallet.update({
+        where: { id: walletId },
+        data: { updatedAt: new Date() },
+      });
+    });
+  }
+
   private async findWalletOfMember(walletId: string, userId: string) {
     const wallet = await this.prisma.wallet.findUnique({
       where: { id: walletId },
