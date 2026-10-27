@@ -1,0 +1,119 @@
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { WalletMemberStatus } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service.js';
+
+export interface ExpenseSplitInput {
+  userId: string;
+  amount: number;
+}
+
+export interface ValidateExpenseInput {
+  walletId: string;
+  amount: number;
+  paidById: string;
+  createdById: string;
+  splits: ExpenseSplitInput[];
+}
+
+export interface ValidateRepaymentInput {
+  walletId: string;
+  fromUserId: string;
+  toUserId: string;
+  amount: number;
+}
+
+// Borne des colonnes Prisma Int / PostgreSQL INTEGER (32 bits signés).
+const MAX_AMOUNT_CENTS = 2_147_483_647;
+
+@Injectable()
+export class FinancialRulesService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async validateExpense(input: ValidateExpenseInput): Promise<void> {
+    this.assertIntegerAmount(input.amount);
+
+    const splitUserIds = input.splits.map((split) => split.userId);
+    if (new Set(splitUserIds).size !== splitUserIds.length) {
+      throw new BadRequestException(
+        'Un utilisateur ne peut avoir qu’une seule part par dépense.',
+      );
+    }
+
+    let splitTotal = 0;
+    for (const split of input.splits) {
+      this.assertIntegerAmount(split.amount, true);
+      splitTotal += split.amount;
+      if (splitTotal > MAX_AMOUNT_CENTS) {
+        throw new BadRequestException('Le total des parts dépasse la limite autorisée.');
+      }
+    }
+
+    if (splitTotal !== input.amount) {
+      throw new BadRequestException(
+        'Le total des parts doit être égal au montant de la dépense.',
+      );
+    }
+
+    await this.assertMembers(input.walletId, [
+      input.paidById,
+      input.createdById,
+      ...splitUserIds,
+    ]);
+  }
+
+  async validateRepayment(input: ValidateRepaymentInput): Promise<void> {
+    this.assertIntegerAmount(input.amount);
+
+    if (input.fromUserId === input.toUserId) {
+      throw new BadRequestException(
+        'Un remboursement ne peut pas être adressé à soi-même.',
+      );
+    }
+
+    await this.assertMembers(input.walletId, [
+      input.fromUserId,
+      input.toUserId,
+    ]);
+  }
+
+  private assertIntegerAmount(amount: number, allowZero = false): void {
+    if (
+      !Number.isSafeInteger(amount) ||
+      amount < 0 ||
+      (!allowZero && amount === 0)
+    ) {
+      throw new BadRequestException(
+        allowZero
+          ? 'Les parts doivent être des nombres entiers de centimes supérieurs ou égaux à zéro.'
+          : 'Les montants doivent être des nombres entiers positifs de centimes.',
+      );
+    }
+
+    if (amount > MAX_AMOUNT_CENTS) {
+      throw new BadRequestException(
+        `Les montants ne peuvent pas dépasser ${MAX_AMOUNT_CENTS} centimes.`,
+      );
+    }
+  }
+
+  private async assertMembers(
+    walletId: string,
+    userIds: string[],
+  ): Promise<void> {
+    const requiredUserIds = [...new Set(userIds)];
+    const members = await this.prisma.walletMember.findMany({
+      where: {
+        walletId,
+        userId: { in: requiredUserIds },
+        status: WalletMemberStatus.MEMBER,
+      },
+      select: { userId: true },
+    });
+
+    if (members.length !== requiredUserIds.length) {
+      throw new BadRequestException(
+        'Les utilisateurs concernés doivent être membres du portefeuille.',
+      );
+    }
+  }
+}

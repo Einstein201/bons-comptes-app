@@ -1,0 +1,91 @@
+import { validate } from 'class-validator';
+import { ValidationPipe } from '@nestjs/common';
+import { describe, expect, it } from 'vitest';
+import { CreateWalletDto } from './create-wallet.dto.js';
+
+describe('CreateWalletDto', () => {
+  const pipe = new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+  });
+
+  it.each([
+    ['missing title', {}],
+    ['empty title', { title: '' }],
+    ['whitespace-only title', { title: '   ' }],
+    ['title too long', { title: 'a'.repeat(101) }],
+    ['non-string title', { title: 42 }],
+    ['non-string description', { title: 'Wallet', description: 42 }],
+    ['null description', { title: 'Wallet', description: null }],
+    [
+      'description too long',
+      { title: 'Wallet', description: 'a'.repeat(1001) },
+    ],
+  ])('rejects %s', async (_case, input) => {
+    const dto = Object.assign(new CreateWalletDto(), input);
+
+    const errors = await validate(dto);
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it('accepts a title with an optional description', async () => {
+    const dto = Object.assign(new CreateWalletDto(), {
+      title: 'Vacances',
+      description: 'Dépenses du voyage',
+    });
+
+    await expect(validate(dto)).resolves.toEqual([]);
+  });
+
+  it('accepts a description of exactly 1000 characters', async () => {
+    const dto = Object.assign(new CreateWalletDto(), {
+      title: 'Vacances',
+      description: 'a'.repeat(1000),
+    });
+
+    await expect(validate(dto)).resolves.toEqual([]);
+  });
+
+  it('accepts a title without any description', async () => {
+    const dto = Object.assign(new CreateWalletDto(), { title: 'Vacances' });
+
+    await expect(validate(dto)).resolves.toEqual([]);
+  });
+
+  it('trims the title through the global validation rules', async () => {
+    await expect(
+      pipe.transform(
+        { title: '  Vacances  ' },
+        { type: 'body', metatype: CreateWalletDto },
+      ),
+    ).resolves.toMatchObject({ title: 'Vacances' });
+  });
+
+  it('rejects a whitespace-only title through the global validation rules', async () => {
+    await expect(
+      pipe.transform(
+        { title: '   ' },
+        { type: 'body', metatype: CreateWalletDto },
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('rejects a null description through the global validation rules', async () => {
+    await expect(
+      pipe.transform(
+        { title: 'Wallet', description: null },
+        { type: 'body', metatype: CreateWalletDto },
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('rejects properties outside the DTO through the global validation rules', async () => {
+    await expect(
+      pipe.transform(
+        { title: 'Wallet', createdById: 'client-supplied-user' },
+        { type: 'body', metatype: CreateWalletDto },
+      ),
+    ).rejects.toThrow();
+  });
+});

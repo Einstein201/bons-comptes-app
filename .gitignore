@@ -142,8 +142,24 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
+# Dossiers de configuration des assistants IA
+.claude/
+.cursor/
+.agents/
+.devin/
+.ai/
+
+# Fichiers d'environnement et de build (par sécurité)
+.env
+dist/
+node_modules/
+
 # Astro generated types
 .astro/
 
 # Turbo Repo
 .turbo
+.neon
+
+# Local PostgreSQL data
+/.local-postgres/
