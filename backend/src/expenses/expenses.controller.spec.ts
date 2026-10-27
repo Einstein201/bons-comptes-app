@@ -4,12 +4,12 @@ import { ExpensesService } from './expenses.service.js';
 
 describe('ExpensesController', () => {
   let controller: ExpensesController;
-  let expensesService: { create: Mock; findAll: Mock };
+  let expensesService: { create: Mock; findAll: Mock; remove: Mock };
 
   const request = { user: { userId: 'user-123' } } as never;
 
   beforeEach(() => {
-    expensesService = { create: vi.fn(), findAll: vi.fn() };
+    expensesService = { create: vi.fn(), findAll: vi.fn(), remove: vi.fn() };
     controller = new ExpensesController(
       expensesService as unknown as ExpensesService,
     );
@@ -43,6 +43,20 @@ describe('ExpensesController', () => {
       'wallet-1',
       'user-123',
       { limit: 20 },
+    );
+  });
+
+  it('deletes an expense of the wallet of the URL as the authenticated user', async () => {
+    expensesService.remove.mockResolvedValue(undefined);
+
+    await expect(
+      controller.remove('wallet-1', 'expense-1', request),
+    ).resolves.toBeUndefined();
+
+    expect(expensesService.remove).toHaveBeenCalledWith(
+      'wallet-1',
+      'expense-1',
+      'user-123',
     );
   });
 });
