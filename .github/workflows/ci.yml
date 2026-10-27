@@ -14,9 +14,8 @@ jobs:
     name: Backend build and test
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: ${{ format('{0}://{1}:{2}@localhost:5432/if13_test_invitations?schema=public', 'postgresql', 'utilisateur', 'motdepasse') }}
-      DATABASE_URL_UNPOOLED: ${{ format('{0}://{1}:{2}@localhost:5432/if13_test_invitations?schema=public', 'postgresql', 'utilisateur', 'motdepasse') }}
-      IF13_TEST_DATABASE_URL: ${{ format('{0}://{1}:{2}@localhost:5432/if13_test_invitations?schema=public', 'postgresql', 'utilisateur', 'motdepasse') }}
+      DATABASE_URL: ${{ format('{0}://{1}:{2}@localhost:5432/bons_comptes?schema=public', 'postgresql', 'utilisateur', 'motdepasse') }}
+      DATABASE_URL_UNPOOLED: ${{ format('{0}://{1}:{2}@localhost:5432/bons_comptes?schema=public', 'postgresql', 'utilisateur', 'motdepasse') }}
 
     services:
       postgres:
@@ -103,6 +102,8 @@ jobs:
       - name: Run invitation contract tests
         run: npm run test:invitations
         env:
+          DATABASE_URL: ${{ format('{0}://{1}:{2}@localhost:5432/if13_test_invitations?schema=public', 'postgresql', 'utilisateur', 'motdepasse') }}
+          DATABASE_URL_UNPOOLED: ${{ format('{0}://{1}:{2}@localhost:5432/if13_test_invitations?schema=public', 'postgresql', 'utilisateur', 'motdepasse') }}
           IF13_TEST_DATABASE_URL: ${{ format('{0}://{1}:{2}@localhost:5432/if13_test_invitations?schema=public', 'postgresql', 'utilisateur', 'motdepasse') }}
           JWT_SECRET: "if13-local-access-secret"
           JWT_REFRESH_SECRET: "if13-local-refresh-secret"
