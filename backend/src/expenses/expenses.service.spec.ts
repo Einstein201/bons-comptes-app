@@ -11,12 +11,10 @@ import { ExpensesService } from './expenses.service.js';
 
 describe('ExpensesService.create', () => {
   let expensesService: ExpensesService;
-  let prisma: {
-    $transaction: Mock;
-    wallet: { findUnique: Mock };
-    walletMember: { findUnique: Mock };
-  };
+  let prisma: { $transaction: Mock };
   let transaction: {
+    $queryRaw: Mock;
+    walletMember: { findUnique: Mock };
     expense: { create: Mock };
     wallet: { update: Mock };
   };
@@ -33,7 +31,7 @@ describe('ExpensesService.create', () => {
   };
 
   function givenMembers(...memberIds: string[]) {
-    prisma.walletMember.findUnique.mockImplementation(async ({ where }) =>
+    transaction.walletMember.findUnique.mockImplementation(async ({ where }) =>
       memberIds.includes(where.walletId_userId.userId)
         ? { status: 'MEMBER' }
         : null,
@@ -42,13 +40,13 @@ describe('ExpensesService.create', () => {
 
   beforeEach(() => {
     transaction = {
+      $queryRaw: vi.fn().mockResolvedValue([{ status: 'OPEN' }]),
+      walletMember: { findUnique: vi.fn() },
       expense: { create: vi.fn().mockResolvedValue(createdExpense) },
       wallet: { update: vi.fn() },
     };
     prisma = {
       $transaction: vi.fn(async (callback) => callback(transaction)),
-      wallet: { findUnique: vi.fn().mockResolvedValue({ status: 'OPEN' }) },
-      walletMember: { findUnique: vi.fn() },
     };
     givenMembers('user-1');
     expensesService = new ExpensesService(prisma as unknown as PrismaService);
@@ -102,6 +100,13 @@ describe('ExpensesService.create', () => {
     );
   });
 
+  it('locks the wallet before checking the members', async () => {
+    await expensesService.create('wallet-1', 'user-1', dto);
+
+    const [sqlParts] = transaction.$queryRaw.mock.calls[0];
+    expect(sqlParts.join('')).toContain('FOR UPDATE');
+  });
+
   it('refreshes the wallet updatedAt in the same transaction', async () => {
     await expensesService.create('wallet-1', 'user-1', dto);
 
@@ -113,12 +118,12 @@ describe('ExpensesService.create', () => {
   });
 
   it('throws NotFoundException when the wallet does not exist', async () => {
-    prisma.wallet.findUnique.mockResolvedValue(null);
+    transaction.$queryRaw.mockResolvedValue([]);
 
     await expect(
       expensesService.create('unknown', 'user-1', dto),
     ).rejects.toBeInstanceOf(NotFoundException);
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(transaction.expense.create).not.toHaveBeenCalled();
   });
 
   it('throws ForbiddenException when the user is not a member', async () => {
@@ -127,25 +132,27 @@ describe('ExpensesService.create', () => {
     await expect(
       expensesService.create('wallet-1', 'user-1', dto),
     ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(transaction.expense.create).not.toHaveBeenCalled();
   });
 
   it('throws ForbiddenException when the user is only invited', async () => {
-    prisma.walletMember.findUnique.mockResolvedValue({ status: 'INVITED' });
+    transaction.walletMember.findUnique.mockResolvedValue({
+      status: 'INVITED',
+    });
 
     await expect(
       expensesService.create('wallet-1', 'user-1', dto),
     ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(transaction.expense.create).not.toHaveBeenCalled();
   });
 
   it('throws ConflictException when the wallet is closed', async () => {
-    prisma.wallet.findUnique.mockResolvedValue({ status: 'CLOSED' });
+    transaction.$queryRaw.mockResolvedValue([{ status: 'CLOSED' }]);
 
     await expect(
       expensesService.create('wallet-1', 'user-1', dto),
     ).rejects.toBeInstanceOf(ConflictException);
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(transaction.expense.create).not.toHaveBeenCalled();
   });
 
   it('throws ForbiddenException when the payer is not a member', async () => {
@@ -155,7 +162,7 @@ describe('ExpensesService.create', () => {
         paidById: 'stranger',
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(transaction.expense.create).not.toHaveBeenCalled();
   });
 });
 
@@ -316,7 +323,6 @@ describe('ExpensesService.findAll', () => {
     expect(prisma.expense.aggregate).not.toHaveBeenCalled();
   });
 });
-
 
 describe('ExpensesService.remove', () => {
   let expensesService: ExpensesService;
