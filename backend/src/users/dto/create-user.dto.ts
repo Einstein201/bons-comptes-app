@@ -1,3 +1,4 @@
+import { Transform } from 'class-transformer';
 import {
   IsByteLength,
   IsEmail,
@@ -6,8 +7,10 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { normalizeEmail } from '../../common/normalize-email.js';
 
 export class CreateUserDto {
+  @Transform(normalizeEmail)
   @IsEmail()
   email: string;
 

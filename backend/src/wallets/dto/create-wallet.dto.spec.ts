@@ -18,6 +18,10 @@ describe('CreateWalletDto', () => {
     ['non-string title', { title: 42 }],
     ['non-string description', { title: 'Wallet', description: 42 }],
     ['null description', { title: 'Wallet', description: null }],
+    [
+      'description too long',
+      { title: 'Wallet', description: 'a'.repeat(1001) },
+    ],
   ])('rejects %s', async (_case, input) => {
     const dto = Object.assign(new CreateWalletDto(), input);
 
@@ -29,6 +33,15 @@ describe('CreateWalletDto', () => {
     const dto = Object.assign(new CreateWalletDto(), {
       title: 'Vacances',
       description: 'Dépenses du voyage',
+    });
+
+    await expect(validate(dto)).resolves.toEqual([]);
+  });
+
+  it('accepts a description of exactly 1000 characters', async () => {
+    const dto = Object.assign(new CreateWalletDto(), {
+      title: 'Vacances',
+      description: 'a'.repeat(1000),
     });
 
     await expect(validate(dto)).resolves.toEqual([]);
