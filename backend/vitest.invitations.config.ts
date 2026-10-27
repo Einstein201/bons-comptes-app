@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitest/config';
 import unitConfig from './vitest.config.js';
 
-// Suite de contrat explicite tant que les routes IF-13 ne sont pas implémentées.
+// Suite de contrat isolée : elle utilise une base PostgreSQL dédiée.
 export default defineConfig({
   ...unitConfig,
   test: {
