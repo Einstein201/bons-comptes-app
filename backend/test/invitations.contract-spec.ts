@@ -216,7 +216,10 @@ describe('IF-13 — contrat HTTP des invitations (UC04 et UC05)', () => {
     it.each(['invalid', 'expired', 'refresh'] as const)(
       'refuse un jeton %s sur les trois routes (401)',
       async (tokenType) => {
-        await testFixtures().createMembership(wallet.id, invitee.id);
+        const invitation = await testFixtures().createMembership(
+          wallet.id,
+          invitee.id,
+        );
         const tokens = {
           invalid: 'jeton-invalide',
           expired: jwt.sign(
