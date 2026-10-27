@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Post,
   Query,
@@ -39,5 +42,15 @@ export class ExpensesController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.expensesService.findAll(walletId, request.user.userId, query);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(
+    @Param('walletId') walletId: string,
+    @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.expensesService.remove(walletId, id, request.user.userId);
   }
 }
