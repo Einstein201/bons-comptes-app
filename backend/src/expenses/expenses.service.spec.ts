@@ -1,10 +1,12 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { encodeCursor } from '../wallets/wallet-pagination.js';
 import { ExpensesService } from './expenses.service.js';
 
 describe('ExpensesService.create', () => {
@@ -154,5 +156,163 @@ describe('ExpensesService.create', () => {
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('ExpensesService.findAll', () => {
+  let expensesService: ExpensesService;
+  let prisma: {
+    wallet: { findUnique: Mock };
+    walletMember: { findUnique: Mock };
+    expense: { findMany: Mock; aggregate: Mock };
+  };
+
+  function expenseRow(id: string, date: string) {
+    return {
+      id,
+      title: `Dépense ${id}`,
+      amount: 1000,
+      date: new Date(`${date}T00:00:00.000Z`),
+      createdAt: new Date('2026-10-27T10:00:00.000Z'),
+      paidBy: { id: 'user-1', name: 'Alice' },
+    };
+  }
+
+  beforeEach(() => {
+    prisma = {
+      wallet: { findUnique: vi.fn().mockResolvedValue({ status: 'OPEN' }) },
+      walletMember: {
+        findUnique: vi.fn().mockResolvedValue({ status: 'MEMBER' }),
+      },
+      expense: {
+        findMany: vi.fn().mockResolvedValue([]),
+        aggregate: vi.fn().mockResolvedValue({ _sum: { amount: null } }),
+      },
+    };
+    expensesService = new ExpensesService(prisma as unknown as PrismaService);
+  });
+
+  it('returns an empty list and a total of 0 when there is no expense', async () => {
+    await expect(
+      expensesService.findAll('wallet-1', 'user-1', { limit: 20 }),
+    ).resolves.toEqual({ items: [], nextCursor: null, totalAmount: 0 });
+  });
+
+  it('returns the expenses with their date as YYYY-MM-DD', async () => {
+    prisma.expense.findMany.mockResolvedValue([
+      expenseRow('e-1', '2026-10-25'),
+    ]);
+
+    const result = await expensesService.findAll('wallet-1', 'user-1', {
+      limit: 20,
+    });
+
+    expect(result.items).toEqual([
+      {
+        id: 'e-1',
+        title: 'Dépense e-1',
+        amount: 1000,
+        date: '2026-10-25',
+        createdAt: new Date('2026-10-27T10:00:00.000Z'),
+        paidBy: { id: 'user-1', name: 'Alice' },
+      },
+    ]);
+  });
+
+  it('sorts by date then id, newest first, and asks for one extra row', async () => {
+    await expensesService.findAll('wallet-1', 'user-1', { limit: 20 });
+
+    expect(prisma.expense.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { walletId: 'wallet-1' },
+        orderBy: [{ date: 'desc' }, { id: 'desc' }],
+        take: 21,
+      }),
+    );
+  });
+
+  it('computes the total of the whole wallet with a database SUM', async () => {
+    prisma.expense.aggregate.mockResolvedValue({ _sum: { amount: 12345 } });
+
+    const result = await expensesService.findAll('wallet-1', 'user-1', {
+      limit: 20,
+    });
+
+    expect(result.totalAmount).toBe(12345);
+    expect(prisma.expense.aggregate).toHaveBeenCalledWith({
+      where: { walletId: 'wallet-1' },
+      _sum: { amount: true },
+    });
+  });
+
+  it('returns a nextCursor when there are more expenses than the limit', async () => {
+    const rows = [
+      expenseRow('e-3', '2026-10-27'),
+      expenseRow('e-2', '2026-10-26'),
+      expenseRow('e-1', '2026-10-25'),
+    ];
+    prisma.expense.findMany.mockResolvedValue(rows);
+
+    const result = await expensesService.findAll('wallet-1', 'user-1', {
+      limit: 2,
+    });
+
+    expect(result.items.map((item) => item.id)).toEqual(['e-3', 'e-2']);
+    expect(result.nextCursor).toBe(encodeCursor(rows[1].date, 'e-2'));
+  });
+
+  it('resumes after the cursor', async () => {
+    const date = new Date('2026-10-26T00:00:00.000Z');
+
+    await expensesService.findAll('wallet-1', 'user-1', {
+      limit: 20,
+      cursor: encodeCursor(date, 'e-2'),
+    });
+
+    expect(prisma.expense.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          walletId: 'wallet-1',
+          OR: [{ date: { lt: date } }, { date, id: { lt: 'e-2' } }],
+        },
+      }),
+    );
+  });
+
+  it('rejects an invalid cursor before querying the database', async () => {
+    await expect(
+      expensesService.findAll('wallet-1', 'user-1', {
+        limit: 20,
+        cursor: 'garbage',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.wallet.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('lets a member read the expenses of a closed wallet', async () => {
+    prisma.wallet.findUnique.mockResolvedValue({ status: 'CLOSED' });
+
+    await expect(
+      expensesService.findAll('wallet-1', 'user-1', { limit: 20 }),
+    ).resolves.toEqual({ items: [], nextCursor: null, totalAmount: 0 });
+  });
+
+  it('throws NotFoundException when the wallet does not exist', async () => {
+    prisma.wallet.findUnique.mockResolvedValue(null);
+
+    await expect(
+      expensesService.findAll('unknown', 'user-1', { limit: 20 }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.expense.findMany).not.toHaveBeenCalled();
+  });
+
+  it('throws ForbiddenException when the user is only invited', async () => {
+    prisma.walletMember.findUnique.mockResolvedValue({ status: 'INVITED' });
+
+    await expect(
+      expensesService.findAll('wallet-1', 'user-1', { limit: 20 }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.expense.findMany).not.toHaveBeenCalled();
+    expect(prisma.expense.aggregate).not.toHaveBeenCalled();
   });
 });

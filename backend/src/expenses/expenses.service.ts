@@ -6,7 +6,9 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { decodeCursor, encodeCursor } from '../wallets/wallet-pagination.js';
 import type { CreateExpenseDto } from './dto/create-expense.dto.js';
+import type { ListExpensesQueryDto } from './dto/list-expenses-query.dto.js';
 
 const expenseSelect = {
   id: true,
@@ -73,6 +75,46 @@ export class ExpensesService {
     });
 
     return toExpenseItem(expense);
+  }
+
+  async findAll(walletId: string, userId: string, query: ListExpensesQueryDto) {
+    const cursor = query.cursor ? decodeCursor(query.cursor) : undefined;
+
+    await this.findWalletOfMember(walletId, userId);
+
+    const afterCursor = cursor
+      ? {
+          OR: [
+            { date: { lt: cursor.date } },
+            { date: cursor.date, id: { lt: cursor.id } },
+          ],
+        }
+      : {};
+
+    const [expenses, total] = await Promise.all([
+      this.prisma.expense.findMany({
+        where: { walletId, ...afterCursor },
+        orderBy: [{ date: 'desc' }, { id: 'desc' }],
+        take: query.limit + 1,
+        select: expenseSelect,
+      }),
+      this.prisma.expense.aggregate({
+        where: { walletId },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    const hasNextPage = expenses.length > query.limit;
+    const page = expenses.slice(0, query.limit);
+    const lastExpense = page[page.length - 1];
+
+    return {
+      items: page.map(toExpenseItem),
+      nextCursor: hasNextPage
+        ? encodeCursor(lastExpense.date, lastExpense.id)
+        : null,
+      totalAmount: total._sum.amount ?? 0,
+    };
   }
 
   private async findWalletOfMember(walletId: string, userId: string) {
