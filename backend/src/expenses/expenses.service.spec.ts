@@ -316,3 +316,85 @@ describe('ExpensesService.findAll', () => {
     expect(prisma.expense.aggregate).not.toHaveBeenCalled();
   });
 });
+
+
+describe('ExpensesService.remove', () => {
+  let expensesService: ExpensesService;
+  let prisma: { $transaction: Mock };
+  let transaction: {
+    expense: { findFirst: Mock; delete: Mock };
+    wallet: { update: Mock };
+  };
+
+  function givenExpense(paidById: string, walletStatus = 'OPEN') {
+    transaction.expense.findFirst.mockResolvedValue({
+      paidById,
+      wallet: { status: walletStatus },
+    });
+  }
+
+  beforeEach(() => {
+    transaction = {
+      expense: { findFirst: vi.fn(), delete: vi.fn() },
+      wallet: { update: vi.fn() },
+    };
+    prisma = {
+      $transaction: vi.fn(async (callback) => callback(transaction)),
+    };
+    expensesService = new ExpensesService(prisma as unknown as PrismaService);
+  });
+
+  it('looks for the expense inside the wallet of the URL only', async () => {
+    givenExpense('user-1');
+
+    await expensesService.remove('wallet-1', 'expense-1', 'user-1');
+
+    expect(transaction.expense.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'expense-1', walletId: 'wallet-1' },
+      }),
+    );
+  });
+
+  it('lets the payer delete the expense and refreshes the wallet updatedAt', async () => {
+    givenExpense('user-1');
+
+    await expensesService.remove('wallet-1', 'expense-1', 'user-1');
+
+    expect(transaction.expense.delete).toHaveBeenCalledWith({
+      where: { id: 'expense-1' },
+    });
+    expect(transaction.wallet.update).toHaveBeenCalledWith({
+      where: { id: 'wallet-1' },
+      data: { updatedAt: expect.any(Date) },
+    });
+  });
+
+  it('throws NotFoundException when the expense is not in this wallet', async () => {
+    transaction.expense.findFirst.mockResolvedValue(null);
+
+    await expect(
+      expensesService.remove('wallet-1', 'expense-1', 'user-1'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(transaction.expense.delete).not.toHaveBeenCalled();
+  });
+
+  it('throws ConflictException when the wallet is closed', async () => {
+    givenExpense('user-1', 'CLOSED');
+
+    await expect(
+      expensesService.remove('wallet-1', 'expense-1', 'user-1'),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(transaction.expense.delete).not.toHaveBeenCalled();
+  });
+
+  it('throws ForbiddenException when the user is not the payer', async () => {
+    givenExpense('user-2');
+
+    await expect(
+      expensesService.remove('wallet-1', 'expense-1', 'user-1'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(transaction.expense.delete).not.toHaveBeenCalled();
+    expect(transaction.wallet.update).not.toHaveBeenCalled();
+  });
+});
