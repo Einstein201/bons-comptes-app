@@ -234,7 +234,7 @@ describe('Leaving and removing members (e2e)', () => {
     });
   });
 
-  describe('financial history', () => {
+  describe('shared history', () => {
     it('keeps a member who paid an expense', async () => {
       const walletId = await createWallet();
       await createExpense(walletId, alice, bob).expect(201);
@@ -243,13 +243,6 @@ describe('Leaving and removing members (e2e)', () => {
       await removeMember(walletId, bob, alice).expect(409);
 
       expect(await membershipStatus(walletId, bob)).toBe('MEMBER');
-    });
-
-    it('keeps a member who entered an expense paid by someone else', async () => {
-      const walletId = await createWallet();
-      await createExpense(walletId, bob, alice).expect(201);
-
-      await leave(walletId, bob).expect(409);
     });
 
     it('keeps a member who has a share of an expense', async () => {
@@ -276,13 +269,15 @@ describe('Leaving and removing members (e2e)', () => {
       await leave(walletId, carol).expect(409);
     });
 
-    it('does not delete the history of the others when a member without history leaves', async () => {
+    it('keeps a member who never paid as soon as the wallet has expenses', async () => {
       const walletId = await createWallet();
       await createExpense(walletId, alice, alice).expect(201);
       await createExpense(walletId, alice, bob).expect(201);
 
-      await leave(walletId, carol).expect(204);
+      await leave(walletId, carol).expect(409);
+      await removeMember(walletId, carol, alice).expect(409);
 
+      expect(await membershipStatus(walletId, carol)).toBe('MEMBER');
       expect(await prisma.expense.count({ where: { walletId } })).toBe(2);
       const list = await request(app.getHttpServer())
         .get(`/wallets/${walletId}/expenses`)
@@ -291,7 +286,32 @@ describe('Leaving and removing members (e2e)', () => {
       expect(list.body.totalAmount).toBe(6000);
     });
 
-    it('never accepts both a departure and a new expense of the same member', async () => {
+    it('ignores the expenses of another wallet', async () => {
+      const walletId = await createWallet();
+      const otherWalletId = await createWallet();
+      await createExpense(otherWalletId, alice, alice).expect(201);
+
+      await leave(walletId, carol).expect(204);
+    });
+
+    it('never lets a member leave while an expense of the wallet is being created', async () => {
+      const walletId = await createWallet();
+
+      const [departure, expense] = await Promise.all([
+        leave(walletId, carol),
+        createExpense(walletId, alice, alice),
+      ]);
+
+      // Le verrou les fait passer l'une après l'autre : la dépense réussit toujours,
+      // le départ réussit seulement s'il passe en premier (dépense partagée sans Carol).
+      expect(expense.status).toBe(201);
+      expect([204, 409]).toContain(departure.status);
+      if (departure.status === 409) {
+        expect(await membershipStatus(walletId, carol)).toBe('MEMBER');
+      }
+    });
+
+    it('never accepts both a departure and a new expense paid by the leaving member', async () => {
       const walletId = await createWallet();
 
       const [departure, expense] = await Promise.all([
@@ -299,7 +319,6 @@ describe('Leaving and removing members (e2e)', () => {
         createExpense(walletId, alice, bob),
       ]);
 
-      // Selon l'ordre d'arrivée : soit Bob part et la dépense est refusée, soit l'inverse.
       expect([
         [204, 403],
         [409, 201],
