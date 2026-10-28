@@ -154,13 +154,13 @@ describe('MembershipsService', () => {
     });
   });
 
-  describe('financial history', () => {
+  describe('shared history', () => {
     it.each([
-      ['an expense', 1, 0, 0],
-      ['an expense split', 0, 1, 0],
-      ['a repayment', 0, 0, 1],
+      ['an expense of the wallet', 1, 0, 0],
+      ['an expense split of the member', 0, 1, 0],
+      ['a repayment of the member', 0, 0, 1],
     ])(
-      'keeps a member referenced by %s',
+      'refuses the departure and the removal when there is %s',
       async (_case, expenses, splits, repayments) => {
         givenHistory(expenses, splits, repayments);
 
@@ -174,15 +174,17 @@ describe('MembershipsService', () => {
       },
     );
 
-    it('looks for the history of the member in this wallet only', async () => {
+    it('counts every expense of the wallet, whoever paid or entered it', async () => {
       await membershipsService.leave('wallet-1', 'member');
 
       expect(transaction.expense.count).toHaveBeenCalledWith({
-        where: {
-          walletId: 'wallet-1',
-          OR: [{ paidById: 'member' }, { createdById: 'member' }],
-        },
+        where: { walletId: 'wallet-1' },
       });
+    });
+
+    it('counts the splits and repayments of the member in this wallet only', async () => {
+      await membershipsService.leave('wallet-1', 'member');
+
       expect(transaction.expenseSplit.count).toHaveBeenCalledWith({
         where: { userId: 'member', expense: { walletId: 'wallet-1' } },
       });
