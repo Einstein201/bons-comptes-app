@@ -61,7 +61,7 @@ export class MembershipsService {
     });
   }
 
-  // Verrou : aucune dépense ne peut être créée pour ce membre pendant son départ.
+  // Verrou : aucune dépense ne peut être créée pendant le départ d'un membre.
   private async lockWallet(
     transaction: Prisma.TransactionClient,
     walletId: string,
@@ -85,9 +85,9 @@ export class MembershipsService {
     walletId: string,
     userId: string,
   ) {
-    if (await this.hasFinancialHistory(transaction, walletId, userId)) {
+    if (await this.hasSharedHistory(transaction, walletId, userId)) {
       throw new ConflictException(
-        'Ce membre a un historique financier et doit rester jusqu’à la clôture.',
+        'Ce porte-monnaie contient des dépenses partagées. Le départ ou le retrait modifierait leur répartition.',
       );
     }
 
@@ -101,18 +101,15 @@ export class MembershipsService {
     });
   }
 
-  private async hasFinancialHistory(
+  // Toute dépense du porte-monnaie est partagée entre tous les membres (bilan IF-19) :
+  // un départ changerait la part des autres, même pour un membre qui n'a rien payé.
+  private async hasSharedHistory(
     transaction: Prisma.TransactionClient,
     walletId: string,
     userId: string,
   ) {
     const [expenses, splits, repayments] = await Promise.all([
-      transaction.expense.count({
-        where: {
-          walletId,
-          OR: [{ paidById: userId }, { createdById: userId }],
-        },
-      }),
+      transaction.expense.count({ where: { walletId } }),
       transaction.expenseSplit.count({
         where: { userId, expense: { walletId } },
       }),
