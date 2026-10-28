@@ -8,6 +8,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { calculateBalances } from './balance-calculator.js';
 import { loadBalanceData } from './balance-data.js';
+import { calculateRepaymentPlan } from './repayment-plan.js';
 
 const closedWalletSelect = {
   id: true,
@@ -62,6 +63,38 @@ export class ClosureService {
   }
 
   async getBalance(walletId: string, userId: string) {
+    await this.checkClosedWalletAccess(walletId, userId);
+    const data = await loadBalanceData(this.prisma, walletId);
+
+    // Le bilan par membre tient compte uniquement des remboursements PAID.
+    const { balances } = calculateBalances(
+      data.totalAmount,
+      data.memberPayments,
+      data.paidRepayments,
+    );
+    const transfers = calculateRepaymentPlan(data)
+      .filter((transfer) => transfer.remainingAmount > 0)
+      .map((transfer) => ({
+        fromUserId: transfer.fromUserId,
+        toUserId: transfer.toUserId,
+        amount: transfer.remainingAmount,
+      }));
+
+    return { walletId, totalAmount: data.totalAmount, balances, transfers };
+  }
+
+  async getOptimizedPayments(walletId: string, userId: string) {
+    await this.checkClosedWalletAccess(walletId, userId);
+    const data = await loadBalanceData(this.prisma, walletId);
+
+    const transfers = calculateRepaymentPlan(data).filter(
+      (transfer) => transfer.remainingAmount > 0,
+    );
+
+    return { walletId, transfers };
+  }
+
+  private async checkClosedWalletAccess(walletId: string, userId: string) {
     const wallet = await this.prisma.wallet.findUnique({
       where: { id: walletId },
       select: { status: true },
@@ -85,22 +118,5 @@ export class ClosureService {
         'Le bilan n’est disponible que pour un porte-monnaie clôturé.',
       );
     }
-
-    const { totalAmount, memberPayments, paidRepayments } =
-      await loadBalanceData(this.prisma, walletId);
-
-    const { balances, transfers } = calculateBalances(
-      totalAmount,
-      memberPayments,
-      paidRepayments,
-    );
-
-    return { walletId, totalAmount, balances, transfers };
-  }
-
-  async getOptimizedPayments(walletId: string, userId: string) {
-    const { transfers } = await this.getBalance(walletId, userId);
-
-    return { walletId, transfers };
   }
 }
