@@ -93,41 +93,46 @@ describe('ClosureService.close', () => {
   });
 });
 
+function createPrismaMock() {
+  return {
+    wallet: { findUnique: vi.fn().mockResolvedValue({ status: 'CLOSED' }) },
+    walletMember: {
+      findUnique: vi.fn().mockResolvedValue({ status: 'MEMBER' }),
+      findMany: vi.fn(),
+    },
+    expense: { aggregate: vi.fn(), groupBy: vi.fn() },
+    repayment: { groupBy: vi.fn() },
+  };
+}
+
 describe('ClosureService.getBalance', () => {
   let closureService: ClosureService;
-  let prisma: {
-    wallet: { findUnique: Mock };
-    walletMember: { findUnique: Mock; findMany: Mock };
-    expense: { aggregate: Mock; groupBy: Mock };
-    repayment: { groupBy: Mock };
-  };
+  let prisma: ReturnType<typeof createPrismaMock>;
 
   beforeEach(() => {
-    prisma = {
-      wallet: { findUnique: vi.fn().mockResolvedValue({ status: 'CLOSED' }) },
-      walletMember: {
-        findUnique: vi.fn().mockResolvedValue({ status: 'MEMBER' }),
-        findMany: vi.fn().mockResolvedValue([
-          { userId: 'user-a', user: { name: 'Alice' } },
-          { userId: 'user-b', user: { name: 'Bob' } },
-        ]),
+    prisma = createPrismaMock();
+    prisma.walletMember.findMany.mockResolvedValue([
+      { userId: 'user-a', user: { name: 'Alice' } },
+      { userId: 'user-b', user: { name: 'Bob' } },
+    ]);
+    prisma.expense.aggregate.mockResolvedValue({ _sum: { amount: 10001 } });
+    prisma.expense.groupBy.mockResolvedValue([
+      { paidById: 'user-a', _sum: { amount: 10001 } },
+    ]);
+    prisma.repayment.groupBy.mockResolvedValue([
+      {
+        fromUserId: 'user-b',
+        toUserId: 'user-a',
+        status: 'PAID',
+        _sum: { amount: 1000 },
       },
-      expense: {
-        aggregate: vi.fn().mockResolvedValue({ _sum: { amount: 10001 } }),
-        groupBy: vi
-          .fn()
-          .mockResolvedValue([{ paidById: 'user-a', _sum: { amount: 10001 } }]),
+      {
+        fromUserId: 'user-b',
+        toUserId: 'user-a',
+        status: 'PENDING',
+        _sum: { amount: 500 },
       },
-      repayment: {
-        groupBy: vi.fn().mockResolvedValue([
-          {
-            fromUserId: 'user-b',
-            toUserId: 'user-a',
-            _sum: { amount: 1000 },
-          },
-        ]),
-      },
-    };
+    ]);
     closureService = new ClosureService(prisma as unknown as PrismaService);
   });
 
@@ -157,7 +162,7 @@ describe('ClosureService.getBalance', () => {
     });
   });
 
-  it('uses only the accepted members and the paid repayments', async () => {
+  it('uses only the accepted members and the paid or pending repayments', async () => {
     await closureService.getBalance('wallet-1', 'user-a');
 
     expect(prisma.walletMember.findMany).toHaveBeenCalledWith(
@@ -166,8 +171,8 @@ describe('ClosureService.getBalance', () => {
       }),
     );
     expect(prisma.repayment.groupBy).toHaveBeenCalledWith({
-      by: ['fromUserId', 'toUserId'],
-      where: { walletId: 'wallet-1', status: 'PAID' },
+      by: ['fromUserId', 'toUserId', 'status'],
+      where: { walletId: 'wallet-1', status: { in: ['PAID', 'PENDING'] } },
       _sum: { amount: true },
     });
   });
@@ -235,38 +240,103 @@ describe('ClosureService.getBalance', () => {
 
 describe('ClosureService.getOptimizedPayments', () => {
   let closureService: ClosureService;
+  let prisma: ReturnType<typeof createPrismaMock>;
 
+  // Exemple de la revue : Alice doit 50 € à Charles et 10 € à David,
+  // Bob doit 40 € à David. Alice a déjà remboursé 10 € à Charles.
   beforeEach(() => {
-    closureService = new ClosureService({} as PrismaService);
+    prisma = createPrismaMock();
+    prisma.walletMember.findMany.mockResolvedValue([
+      { userId: 'alice', user: { name: 'Alice' } },
+      { userId: 'bob', user: { name: 'Bob' } },
+      { userId: 'charles', user: { name: 'Charles' } },
+      { userId: 'david', user: { name: 'David' } },
+    ]);
+    prisma.expense.aggregate.mockResolvedValue({ _sum: { amount: 24000 } });
+    prisma.expense.groupBy.mockResolvedValue([
+      { paidById: 'bob', _sum: { amount: 2000 } },
+      { paidById: 'charles', _sum: { amount: 11000 } },
+      { paidById: 'david', _sum: { amount: 11000 } },
+    ]);
+    prisma.repayment.groupBy.mockResolvedValue([
+      {
+        fromUserId: 'alice',
+        toUserId: 'charles',
+        status: 'PAID',
+        _sum: { amount: 1000 },
+      },
+    ]);
+    closureService = new ClosureService(prisma as unknown as PrismaService);
   });
 
-  it('returns the transfers computed by the balance', async () => {
-    const transfers = [
-      { fromUserId: 'user-b', toUserId: 'user-a', amount: 2500 },
-    ];
-    vi.spyOn(closureService, 'getBalance').mockResolvedValue({
-      walletId: 'wallet-1',
-      totalAmount: 5000,
-      balances: [],
-      transfers,
-    });
-
+  it('keeps the pairs of the initial plan after a paid repayment', async () => {
     await expect(
-      closureService.getOptimizedPayments('wallet-1', 'user-a'),
-    ).resolves.toEqual({ walletId: 'wallet-1', transfers });
-    expect(closureService.getBalance).toHaveBeenCalledWith(
+      closureService.getOptimizedPayments('wallet-1', 'bob'),
+    ).resolves.toEqual({
+      walletId: 'wallet-1',
+      transfers: [
+        {
+          fromUserId: 'alice',
+          toUserId: 'charles',
+          initialAmount: 5000,
+          remainingAmount: 4000,
+          declarableAmount: 4000,
+        },
+        {
+          fromUserId: 'bob',
+          toUserId: 'david',
+          initialAmount: 4000,
+          remainingAmount: 4000,
+          declarableAmount: 4000,
+        },
+        {
+          fromUserId: 'alice',
+          toUserId: 'david',
+          initialAmount: 1000,
+          remainingAmount: 1000,
+          declarableAmount: 1000,
+        },
+      ],
+    });
+  });
+
+  it('gives the balance the same pairs, with the amount still to pay', async () => {
+    const { transfers } = await closureService.getBalance('wallet-1', 'bob');
+
+    expect(transfers).toEqual([
+      { fromUserId: 'alice', toUserId: 'charles', amount: 4000 },
+      { fromUserId: 'bob', toUserId: 'david', amount: 4000 },
+      { fromUserId: 'alice', toUserId: 'david', amount: 1000 },
+    ]);
+  });
+
+  it('hides the pairs that are completely paid', async () => {
+    prisma.repayment.groupBy.mockResolvedValue([
+      {
+        fromUserId: 'alice',
+        toUserId: 'david',
+        status: 'PAID',
+        _sum: { amount: 1000 },
+      },
+    ]);
+
+    const { transfers } = await closureService.getOptimizedPayments(
       'wallet-1',
-      'user-a',
+      'bob',
     );
+
+    expect(transfers.map((transfer) => transfer.toUserId)).toEqual([
+      'charles',
+      'david',
+    ]);
   });
 
   it('keeps the access rules of the balance', async () => {
-    vi.spyOn(closureService, 'getBalance').mockRejectedValue(
-      new ConflictException(),
-    );
+    prisma.wallet.findUnique.mockResolvedValue({ status: 'OPEN' });
 
     await expect(
-      closureService.getOptimizedPayments('wallet-1', 'user-a'),
+      closureService.getOptimizedPayments('wallet-1', 'bob'),
     ).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.expense.aggregate).not.toHaveBeenCalled();
   });
 });
