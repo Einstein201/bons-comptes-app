@@ -9,6 +9,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
 import { UsersModule } from './users/users.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { WalletsModule } from './wallets/wallets.module.js';
+import { InvitationsModule } from './invitations/invitations.module.js';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { WalletsModule } from './wallets/wallets.module.js';
     FinancialModule,
     WalletsModule,
     ExpensesModule,
+    InvitationsModule,
     ClosureModule,
   ],
   controllers: [AppController],
