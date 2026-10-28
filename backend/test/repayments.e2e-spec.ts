@@ -11,6 +11,18 @@ interface TestUser {
   token: string;
 }
 
+interface PlannedTransfer {
+  fromUserId: string;
+  toUserId: string;
+  initialAmount: number;
+  remainingAmount: number;
+  declarableAmount: number;
+}
+
+function pairOf(transfer: PlannedTransfer) {
+  return `${transfer.fromUserId} -> ${transfer.toUserId}`;
+}
+
 describe('Repayments and optimized payments (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
@@ -76,6 +88,51 @@ describe('Repayments and optimized payments (e2e)', () => {
         .set('Authorization', `Bearer ${alice.token}`)
         .expect(200);
     }
+
+    return walletId;
+  }
+
+  // Quatre membres, part de 60 € chacun : Alice (0 €) doit 60 €, Bob (20 €) doit 40 €,
+  // Carol et Dave (110 € chacun) attendent 50 € chacun.
+  async function createWalletWithTwoCreditors() {
+    const creation = await request(app.getHttpServer())
+      .post('/wallets')
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({ title: 'Colocation' })
+      .expect(201);
+    const walletId = creation.body.id as string;
+
+    await prisma.walletMember.createMany({
+      data: [bob, carol, dave].map((user) => ({
+        walletId,
+        userId: user.id,
+        status: 'MEMBER' as const,
+        acceptedAt: new Date(),
+      })),
+    });
+
+    const payments: [TestUser, number][] = [
+      [bob, 2000],
+      [carol, 11000],
+      [dave, 11000],
+    ];
+    for (const [payer, amount] of payments) {
+      await request(app.getHttpServer())
+        .post(`/wallets/${walletId}/expenses`)
+        .set('Authorization', `Bearer ${alice.token}`)
+        .send({
+          title: 'Loyer',
+          amount,
+          date: '2026-10-25',
+          paidById: payer.id,
+        })
+        .expect(201);
+    }
+
+    await request(app.getHttpServer())
+      .post(`/wallets/${walletId}/close`)
+      .set('Authorization', `Bearer ${alice.token}`)
+      .expect(200);
 
     return walletId;
   }
@@ -151,10 +208,67 @@ describe('Repayments and optimized payments (e2e)', () => {
       expect(response.body.transfers).toHaveLength(2);
       expect(response.body.transfers).toEqual(
         expect.arrayContaining([
-          { fromUserId: bob.id, toUserId: alice.id, amount: 3000 },
-          { fromUserId: carol.id, toUserId: alice.id, amount: 3000 },
+          {
+            fromUserId: bob.id,
+            toUserId: alice.id,
+            initialAmount: 3000,
+            remainingAmount: 3000,
+            declarableAmount: 3000,
+          },
+          {
+            fromUserId: carol.id,
+            toUserId: alice.id,
+            initialAmount: 3000,
+            remainingAmount: 3000,
+            declarableAmount: 3000,
+          },
         ]),
       );
+    });
+
+    it('keeps the pairs of the initial plan, and each proposal can be declared', async () => {
+      // Au départ : Alice doit 50 € et 10 €, Bob doit 40 €, à deux créanciers.
+      const walletId = await createWalletWithTwoCreditors();
+      const before = await getOptimizedPayments(walletId, alice).expect(200);
+      const initialPlan: PlannedTransfer[] = before.body.transfers;
+      expect(initialPlan.map((item) => item.initialAmount)).toEqual([
+        5000, 4000, 1000,
+      ]);
+
+      // Alice rembourse 10 € sur sa dette de 50 €, et c'est confirmé.
+      const firstPair = initialPlan[0];
+      const declaration = await declare(walletId, alice, {
+        toUserId: firstPair.toUserId,
+        amount: 1000,
+      }).expect(201);
+      await changeStatus(
+        walletId,
+        declaration.body.id,
+        'confirm',
+        alice,
+      ).expect(200);
+
+      const after = await getOptimizedPayments(walletId, alice).expect(200);
+      const plan: PlannedTransfer[] = after.body.transfers;
+
+      expect(plan.map(pairOf)).toEqual(initialPlan.map(pairOf));
+      expect(plan[0].remainingAmount).toBe(4000);
+      expect(plan[0].declarableAmount).toBe(4000);
+
+      // Chaque proposition est acceptée par la déclaration, puis plus rien n'est déclarable.
+      const users = [alice, bob, carol, dave];
+      for (const transfer of plan) {
+        const debtor = users.find((user) => user.id === transfer.fromUserId)!;
+        await declare(walletId, debtor, {
+          toUserId: transfer.toUserId,
+          amount: transfer.declarableAmount,
+        }).expect(201);
+      }
+
+      const final = await getOptimizedPayments(walletId, alice).expect(200);
+      for (const transfer of final.body.transfers as PlannedTransfer[]) {
+        expect(transfer.declarableAmount).toBe(0);
+      }
     });
 
     it('rejects a request without token with HTTP 401', async () => {
@@ -322,7 +436,13 @@ describe('Repayments and optimized payments (e2e)', () => {
       const payments = await getOptimizedPayments(walletId, bob).expect(200);
       expect(payments.body.transfers).toEqual(
         expect.arrayContaining([
-          { fromUserId: bob.id, toUserId: alice.id, amount: 2000 },
+          {
+            fromUserId: bob.id,
+            toUserId: alice.id,
+            initialAmount: 3000,
+            remainingAmount: 2000,
+            declarableAmount: 2000,
+          },
         ]),
       );
     });
