@@ -1,4 +1,5 @@
 import { Transform } from 'class-transformer';
+import { MAX_AMOUNT_CENTS } from '../../common/amounts.js';
 import {
   IsInt,
   IsISO8601,
@@ -11,7 +12,6 @@ import {
   ValidateIf,
 } from 'class-validator';
 
-export const MAX_AMOUNT_CENTS = 2_147_483_647;
 
 export class CreateExpenseDto {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))

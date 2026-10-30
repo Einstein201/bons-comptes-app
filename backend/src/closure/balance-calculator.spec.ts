@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateBalances } from './balance-calculator.js';
+import { calculateBalances, optimizeTransfers } from './balance-calculator.js';
 
 function member(userId: string, paidAmount: number) {
   return { userId, name: `Nom ${userId}`, paidAmount };
@@ -102,40 +102,6 @@ describe('calculateBalances', () => {
     expect(result.transfers).toEqual([]);
   });
 
-  it('matches debtors and creditors in a deterministic order', () => {
-    const result = calculateBalances(
-      12000,
-      [
-        member('user-d', 0),
-        member('user-b', 6000),
-        member('user-c', 0),
-        member('user-a', 6000),
-      ],
-      [],
-    );
-
-    expect(result.transfers).toEqual([
-      { fromUserId: 'user-c', toUserId: 'user-a', amount: 3000 },
-      { fromUserId: 'user-d', toUserId: 'user-b', amount: 3000 },
-    ]);
-  });
-
-  it('splits a debt between several creditors when needed', () => {
-    const result = calculateBalances(
-      9000,
-      [member('user-a', 4000), member('user-b', 5000), member('user-c', 0)],
-      [],
-    );
-
-    expect(result.balances.map((item) => item.balance)).toEqual([
-      1000, 2000, -3000,
-    ]);
-    expect(result.transfers).toEqual([
-      { fromUserId: 'user-c', toUserId: 'user-a', amount: 1000 },
-      { fromUserId: 'user-c', toUserId: 'user-b', amount: 2000 },
-    ]);
-  });
-
   it('always produces balances whose sum is zero', () => {
     const { balances } = calculateBalances(
       100003,
@@ -159,5 +125,87 @@ describe('calculateBalances', () => {
         [{ fromUserId: 'user-b', toUserId: 'someone-else', amount: 100 }],
       ),
     ).toThrow('Le bilan est déséquilibré');
+  });
+});
+
+describe('optimizeTransfers', () => {
+  function balance(userId: string, amount: number) {
+    return { userId, balance: amount };
+  }
+
+  it('returns no transfer when every balance is zero', () => {
+    expect(
+      optimizeTransfers([balance('user-a', 0), balance('user-b', 0)]),
+    ).toEqual([]);
+  });
+
+  it('matches the largest debt with the largest credit first', () => {
+    const transfers = optimizeTransfers([
+      balance('user-a', 1000),
+      balance('user-b', 2000),
+      balance('user-c', -500),
+      balance('user-d', -2500),
+    ]);
+
+    expect(transfers).toEqual([
+      { fromUserId: 'user-d', toUserId: 'user-b', amount: 2000 },
+      { fromUserId: 'user-c', toUserId: 'user-a', amount: 500 },
+      { fromUserId: 'user-d', toUserId: 'user-a', amount: 500 },
+    ]);
+  });
+
+  it('splits a debt between several creditors when needed', () => {
+    expect(
+      optimizeTransfers([
+        balance('user-a', 1000),
+        balance('user-b', 2000),
+        balance('user-c', -3000),
+      ]),
+    ).toEqual([
+      { fromUserId: 'user-c', toUserId: 'user-b', amount: 2000 },
+      { fromUserId: 'user-c', toUserId: 'user-a', amount: 1000 },
+    ]);
+  });
+
+  it('breaks ties by user id to stay deterministic', () => {
+    const transfers = optimizeTransfers([
+      balance('user-d', -3000),
+      balance('user-b', 3000),
+      balance('user-c', -3000),
+      balance('user-a', 3000),
+    ]);
+
+    expect(transfers).toEqual([
+      { fromUserId: 'user-c', toUserId: 'user-a', amount: 3000 },
+      { fromUserId: 'user-d', toUserId: 'user-b', amount: 3000 },
+    ]);
+  });
+
+  it('returns at most n - 1 transfers that settle every balance', () => {
+    const balances = [
+      balance('user-a', 4321),
+      balance('user-b', -1234),
+      balance('user-c', 999),
+      balance('user-d', -2000),
+      balance('user-e', -2086),
+    ];
+
+    const transfers = optimizeTransfers(balances);
+
+    expect(transfers.length).toBeLessThanOrEqual(balances.length - 1);
+    for (const item of balances) {
+      const received = transfers
+        .filter((transfer) => transfer.toUserId === item.userId)
+        .reduce((sum, transfer) => sum + transfer.amount, 0);
+      const sent = transfers
+        .filter((transfer) => transfer.fromUserId === item.userId)
+        .reduce((sum, transfer) => sum + transfer.amount, 0);
+
+      expect(received - sent).toBe(item.balance);
+    }
+    for (const transfer of transfers) {
+      expect(Number.isInteger(transfer.amount)).toBe(true);
+      expect(transfer.amount).toBeGreaterThan(0);
+    }
   });
 });

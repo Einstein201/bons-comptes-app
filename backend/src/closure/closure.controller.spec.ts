@@ -4,12 +4,20 @@ import { ClosureService } from './closure.service.js';
 
 describe('ClosureController', () => {
   let controller: ClosureController;
-  let closureService: { close: Mock; getBalance: Mock };
+  let closureService: {
+    close: Mock;
+    getBalance: Mock;
+    getOptimizedPayments: Mock;
+  };
 
   const request = { user: { userId: 'user-123' } } as never;
 
   beforeEach(() => {
-    closureService = { close: vi.fn(), getBalance: vi.fn() };
+    closureService = {
+      close: vi.fn(),
+      getBalance: vi.fn(),
+      getOptimizedPayments: vi.fn(),
+    };
     controller = new ClosureController(
       closureService as unknown as ClosureService,
     );
@@ -33,6 +41,20 @@ describe('ClosureController', () => {
     );
 
     expect(closureService.getBalance).toHaveBeenCalledWith(
+      'wallet-1',
+      'user-123',
+    );
+  });
+
+  it('returns the optimized payments of the wallet of the URL for the authenticated user', async () => {
+    const payments = { walletId: 'wallet-1', transfers: [] };
+    closureService.getOptimizedPayments.mockResolvedValue(payments);
+
+    await expect(
+      controller.getOptimizedPayments('wallet-1', request),
+    ).resolves.toBe(payments);
+
+    expect(closureService.getOptimizedPayments).toHaveBeenCalledWith(
       'wallet-1',
       'user-123',
     );
