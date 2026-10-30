@@ -38,21 +38,35 @@ export class ExpensesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(walletId: string, userId: string, dto: CreateExpenseDto) {
-    const wallet = await this.findWalletOfMember(walletId, userId);
-
-    if (wallet.status !== 'OPEN') {
-      throw new ConflictException('Ce porte-monnaie est fermé.');
-    }
-
-    const paidById = dto.paidById ?? userId;
-
-    if (paidById !== userId && !(await this.isMember(walletId, paidById))) {
-      throw new ForbiddenException(
-        'Le payeur doit être un membre du porte-monnaie.',
-      );
-    }
-
     const expense = await this.prisma.$transaction(async (transaction) => {
+      // Verrou sur le porte-monnaie : un membre ne peut pas le quitter pendant la création (IF-28).
+      const lockedWallets = await transaction.$queryRaw<{ status: string }[]>`
+        SELECT "status" FROM "Wallet" WHERE "id" = ${walletId} FOR UPDATE`;
+      const wallet = lockedWallets[0];
+
+      if (!wallet) {
+        throw new NotFoundException('Porte-monnaie introuvable.');
+      }
+
+      if (!(await this.isMember(transaction, walletId, userId))) {
+        throw new ForbiddenException('Accès refusé à ce porte-monnaie.');
+      }
+
+      if (wallet.status !== 'OPEN') {
+        throw new ConflictException('Ce porte-monnaie est fermé.');
+      }
+
+      const paidById = dto.paidById ?? userId;
+
+      if (
+        paidById !== userId &&
+        !(await this.isMember(transaction, walletId, paidById))
+      ) {
+        throw new ForbiddenException(
+          'Le payeur doit être un membre du porte-monnaie.',
+        );
+      }
+
       const createdExpense = await transaction.expense.create({
         data: {
           walletId,
@@ -160,15 +174,19 @@ export class ExpensesService {
       throw new NotFoundException('Porte-monnaie introuvable.');
     }
 
-    if (!(await this.isMember(walletId, userId))) {
+    if (!(await this.isMember(this.prisma, walletId, userId))) {
       throw new ForbiddenException('Accès refusé à ce porte-monnaie.');
     }
 
     return wallet;
   }
 
-  private async isMember(walletId: string, userId: string) {
-    const membership = await this.prisma.walletMember.findUnique({
+  private async isMember(
+    client: Prisma.TransactionClient,
+    walletId: string,
+    userId: string,
+  ) {
+    const membership = await client.walletMember.findUnique({
       where: { walletId_userId: { walletId, userId } },
       select: { status: true },
     });
