@@ -30,7 +30,7 @@
 
 ##  Plan de test / démonstration
 
-1. <!-- Étapes pour tester la fonctionnalité, les commandes ou les parcours UI. -->
+1. <!-- Étapes pour tester la fonctionnalité, les commandes ou le parcours UI. -->
 2. <!-- Cas limites vérifiés, selon le périmètre : 400, 401, 403, 404, 409, etc. -->
 
 ##  Notes pour la relecture
