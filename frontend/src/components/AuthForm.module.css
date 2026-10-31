@@ -1,0 +1,87 @@
+.card {
+  width: min(460px, 100%);
+  margin: 64px auto;
+  padding: 36px;
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-card);
+  background: var(--color-bg);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.06);
+}
+
+.header {
+  margin-bottom: 28px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.header h1 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 32px;
+  letter-spacing: -0.03em;
+}
+
+.header > p:last-child {
+  margin: 10px 0 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.fields {
+  display: grid;
+  gap: 20px;
+}
+
+.submit {
+  width: 100%;
+  margin-top: 28px;
+}
+
+.switch {
+  margin: 24px 0 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+.switch a {
+  color: var(--color-primary-strong);
+  font-weight: 600;
+}
+
+.alert,
+.success {
+  margin: 0 0 20px;
+  padding: 12px 16px;
+  border: 1px solid;
+  border-radius: var(--radius-control);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.alert {
+  border-color: var(--color-error-border);
+  background: var(--color-error-bg);
+  color: var(--color-error);
+}
+
+.success {
+  border-color: var(--color-success-border);
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+@media (max-width: 520px) {
+  .card {
+    margin: 32px auto;
+    padding: 28px 22px;
+  }
+}

@@ -147,3 +147,6 @@ jobs:
 
       - name: Audit dependencies
         run: npm audit
+
+      - name: Run frontend tests
+        run: npm test
