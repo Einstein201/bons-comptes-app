@@ -67,5 +67,22 @@ ou `localhost` avec des ports différents). Deux domaines sans lien ne
 permettront pas la restauration de session avec cette configuration.
 
 `GET /auth/me` renvoie actuellement `{ userId }`, sans nom ni email.
-Les écrans et le contexte React d'authentification seront raccordés dans le
-lot suivant du billet IF-34.
+
+## Parcours d'authentification
+
+Les pages `/register` et `/login` utilisent les routes `POST /users`,
+`POST /auth/login` et `GET /auth/me`. Après inscription, l'utilisateur se
+connecte avec ses identifiants. Le formulaire de connexion accepte un chemin
+interne `next` pour revenir à la page protégée demandée; les destinations
+externes sont refusées.
+
+Le fournisseur React restaure la session au montage de l'application. Les pages
+protégées affichent un état de vérification avant d'exposer leur contenu et
+redirigent un visiteur vers la connexion. En cas d'indisponibilité réseau, elles
+proposent de réessayer au lieu de déclarer la session invalide.
+
+Le backend renvoie uniquement `{ userId }` pour `GET /auth/me`; l'en-tête
+affiche donc les actions de compte sans inventer de nom ou d'adresse email.
+La déconnexion efface toujours le token en mémoire. Si le serveur ne confirme
+pas l'opération, l'interface indique que la révocation serveur n'a pas été
+confirmée.

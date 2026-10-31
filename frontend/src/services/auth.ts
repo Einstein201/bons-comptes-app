@@ -20,7 +20,12 @@ export async function login(input: LoginInput): Promise<AuthUser> {
     body: JSON.stringify(input),
   }, false);
   setAccessToken(await readAccessToken(response));
-  return getCurrentUser();
+  try {
+    return await getCurrentUser();
+  } catch (error) {
+    setAccessToken(null);
+    throw error;
+  }
 }
 
 export async function getCurrentUser(): Promise<AuthUser> {
@@ -41,9 +46,12 @@ export async function restoreSession(): Promise<AuthUser> {
 }
 
 export async function logout(): Promise<void> {
-  await apiRequest('/auth/logout', {
-    method: 'POST',
-    credentials: 'include',
-  }, false);
-  setAccessToken(null);
+  try {
+    await apiRequest('/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+    }, false);
+  } finally {
+    setAccessToken(null);
+  }
 }

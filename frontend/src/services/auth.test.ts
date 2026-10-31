@@ -62,5 +62,5 @@ it('signale un échec de déconnexion au lieu de simuler un succès', async () =
   setAccessToken('access');
   fetchMock.mockRejectedValue(new TypeError('Network error'));
   await expect(logout()).rejects.toThrow('Network error');
-  expect(getAccessToken()).toBe('access');
+  expect(getAccessToken()).toBeNull();
 });
