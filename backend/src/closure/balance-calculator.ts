@@ -66,10 +66,21 @@ export function calculateBalances(
     );
   }
 
-  return { balances, transfers: calculateTransfers(balances) };
+  return { balances, transfers: optimizeTransfers(balances) };
 }
 
-function calculateTransfers(balances: MemberBalance[]): Transfer[] {
+function byAmountThenUserId(
+  a: { userId: string; amount: number },
+  b: { userId: string; amount: number },
+) {
+  if (a.amount !== b.amount) return b.amount - a.amount;
+  return byUserId(a, b);
+}
+
+// Algorithme glouton : au plus n - 1 virements, sans garantir le minimum absolu.
+export function optimizeTransfers(
+  balances: { userId: string; balance: number }[],
+): Transfer[] {
   const debtors = balances
     .filter((member) => member.balance < 0)
     .map((member) => ({ userId: member.userId, amount: -member.balance }));
@@ -78,12 +89,13 @@ function calculateTransfers(balances: MemberBalance[]): Transfer[] {
     .map((member) => ({ userId: member.userId, amount: member.balance }));
 
   const transfers: Transfer[] = [];
-  let debtorIndex = 0;
-  let creditorIndex = 0;
 
-  while (debtorIndex < debtors.length && creditorIndex < creditors.length) {
-    const debtor = debtors[debtorIndex];
-    const creditor = creditors[creditorIndex];
+  while (debtors.length > 0 && creditors.length > 0) {
+    debtors.sort(byAmountThenUserId);
+    creditors.sort(byAmountThenUserId);
+
+    const debtor = debtors[0];
+    const creditor = creditors[0];
     const amount = Math.min(debtor.amount, creditor.amount);
 
     transfers.push({
@@ -95,8 +107,8 @@ function calculateTransfers(balances: MemberBalance[]): Transfer[] {
     debtor.amount -= amount;
     creditor.amount -= amount;
 
-    if (debtor.amount === 0) debtorIndex++;
-    if (creditor.amount === 0) creditorIndex++;
+    if (debtor.amount === 0) debtors.shift();
+    if (creditor.amount === 0) creditors.shift();
   }
 
   return transfers;
