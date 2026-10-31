@@ -14,7 +14,6 @@ export type CreateWalletInput = {
 };
 
 // POST /wallets n'accepte que title et description : le créateur est l'utilisateur authentifié.
-// TODO(auth) : joindre les identifiants de l'utilisateur dès que le mécanisme d'authentification existe.
 export async function createWallet(input: CreateWalletInput): Promise<Wallet> {
   const response = await apiRequest('/wallets', {
     method: 'POST',
