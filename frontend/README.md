@@ -42,7 +42,37 @@ Le front-end écoute sur [http://localhost:3001](http://localhost:3001). Le back
 
 ```bash
 npm run lint
+npm test
 npm run build
+npm audit
 ```
 
+Le lint utilise ESLint 10 et `typescript-eslint`. Une résolution forcée
+(`overrides`) de `minimatch` vers la version 11.0.3 corrige l'alerte
+[GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)
+dans leurs dépendances transitives. Elle pourra être retirée lorsque ces outils
+utiliseront une version corrigée sans cette résolution.
+
 Le routage utilise l'App Router dans `src/app/`. Les composants réutilisables seront placés dans `src/components/`, et les appels HTTP vers le backend dans `src/services/`.
+
+## Client API et session
+
+Les appels `apiRequest` sont authentifiés par défaut : le token d'accès est
+conservé uniquement en mémoire et ajouté à l'en-tête `Authorization`.
+Les appels publics (inscription, connexion, refresh et logout) désactivent
+explicitement cette authentification.
+
+Un rejet HTTP 401 déclenche un seul renouvellement, partagé entre les requêtes
+concurrentes, puis une seule nouvelle tentative. Les erreurs réseau sont
+propagées et ne sont pas assimilées à une session expirée.
+La connexion, le renouvellement et la déconnexion utilisent `credentials: 'include'`.
+Le refresh token reste dans le cookie HTTP-only du backend, sans stockage local.
+Le backend doit autoriser l'origine du frontend et les cookies dans sa
+configuration CORS. Son cookie utilise `SameSite=Strict` : les deux applications
+doivent être sur le même site (par exemple deux sous-domaines du même domaine,
+ou `localhost` avec des ports différents). Deux domaines sans lien ne
+permettront pas la restauration de session avec cette configuration.
+
+`GET /auth/me` renvoie actuellement `{ userId }`, sans nom ni email.
+Les écrans et le contexte React d'authentification seront raccordés dans le
+lot suivant du billet IF-34.
