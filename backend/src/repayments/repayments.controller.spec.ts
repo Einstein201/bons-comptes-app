@@ -4,7 +4,12 @@ import { RepaymentsService } from './repayments.service.js';
 
 describe('RepaymentsController', () => {
   let controller: RepaymentsController;
-  let repaymentsService: { declare: Mock; confirm: Mock; cancel: Mock };
+  let repaymentsService: {
+    declare: Mock;
+    findAll: Mock;
+    confirm: Mock;
+    cancel: Mock;
+  };
 
   const request = { user: { userId: 'user-123' } } as never;
   const repayment = { id: 'repayment-1' };
@@ -12,6 +17,7 @@ describe('RepaymentsController', () => {
   beforeEach(() => {
     repaymentsService = {
       declare: vi.fn().mockResolvedValue(repayment),
+      findAll: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
       confirm: vi.fn().mockResolvedValue(repayment),
       cancel: vi.fn().mockResolvedValue(repayment),
     };
@@ -31,6 +37,20 @@ describe('RepaymentsController', () => {
       'wallet-1',
       'user-123',
       dto,
+    );
+  });
+
+  it('lists the repayments for the authenticated user', async () => {
+    const query = { status: 'PENDING' as const, limit: 20 };
+
+    await expect(
+      controller.findAll('wallet-1', query, request),
+    ).resolves.toEqual({ items: [], nextCursor: null });
+
+    expect(repaymentsService.findAll).toHaveBeenCalledWith(
+      'wallet-1',
+      'user-123',
+      query,
     );
   });
 

@@ -9,12 +9,25 @@ import { Prisma } from '@prisma/client';
 import { calculateBalances } from '../closure/balance-calculator.js';
 import { loadBalanceData } from '../closure/balance-data.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { decodeCursor, encodeCursor } from '../wallets/wallet-pagination.js';
 import type { CreateRepaymentDto } from './dto/create-repayment.dto.js';
+import type { ListRepaymentsQueryDto } from './dto/list-repayments-query.dto.js';
 
 const repaymentSelect = {
   id: true,
   fromUserId: true,
   toUserId: true,
+  amount: true,
+  status: true,
+  createdAt: true,
+  paidAt: true,
+} satisfies Prisma.RepaymentSelect;
+
+// Seuls l'id et le nom des membres sont exposés : jamais leur email.
+const repaymentListSelect = {
+  id: true,
+  fromUser: { select: { id: true, name: true } },
+  toUser: { select: { id: true, name: true } },
   amount: true,
   status: true,
   createdAt: true,
@@ -85,6 +98,70 @@ export class RepaymentsService {
 
       return repayment;
     });
+  }
+
+  async findAll(
+    walletId: string,
+    userId: string,
+    query: ListRepaymentsQueryDto,
+  ) {
+    const cursor = query.cursor ? decodeCursor(query.cursor) : undefined;
+
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { id: walletId },
+      select: { createdById: true },
+    });
+
+    if (!wallet) {
+      throw new NotFoundException('Porte-monnaie introuvable.');
+    }
+
+    if (!(await this.isMember(this.prisma, walletId, userId))) {
+      throw new ForbiddenException('Accès refusé à ce porte-monnaie.');
+    }
+
+    // Le curseur contient createdAt et id de la dernière ligne : la page suivante
+    // reprend juste après, dans le même ordre (createdAt puis id décroissants).
+    const afterCursor = cursor
+      ? {
+          OR: [
+            { createdAt: { lt: cursor.date } },
+            { createdAt: cursor.date, id: { lt: cursor.id } },
+          ],
+        }
+      : {};
+
+    const repayments = await this.prisma.repayment.findMany({
+      where: { walletId, status: query.status, ...afterCursor },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: query.limit + 1,
+      select: repaymentListSelect,
+    });
+
+    const hasNextPage = repayments.length > query.limit;
+    const page = repayments.slice(0, query.limit);
+    const lastRepayment = page[page.length - 1];
+
+    // Simples indications pour l'affichage : confirm et cancel revérifient
+    // les droits et le statut au moment de l'action.
+    const items = page.map((repayment) => {
+      const isPending = repayment.status === 'PENDING';
+
+      return {
+        ...repayment,
+        canConfirm:
+          isPending &&
+          (userId === repayment.toUser.id || userId === wallet.createdById),
+        canCancel: isPending && userId === repayment.fromUser.id,
+      };
+    });
+
+    return {
+      items,
+      nextCursor: hasNextPage
+        ? encodeCursor(lastRepayment.createdAt, lastRepayment.id)
+        : null,
+    };
   }
 
   async confirm(walletId: string, repaymentId: string, userId: string) {
