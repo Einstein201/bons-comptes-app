@@ -1,0 +1,20 @@
+.state {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 16px;
+  min-height: 60vh;
+  padding: 32px;
+  color: var(--color-text-body);
+  text-align: center;
+}
+
+.state h1,
+.state p {
+  margin: 0;
+}
+
+.state h1 {
+  color: var(--color-text);
+  font-size: 24px;
+}
