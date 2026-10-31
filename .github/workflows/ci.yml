@@ -43,7 +43,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '22.22.3'
+          node-version: "22.22.3"
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
@@ -67,6 +67,31 @@ jobs:
         env:
           DATABASE_URL: postgresql://utilisateur:motdepasse@localhost:5432/bons_comptes?schema=public
 
+      - name: Prepare invitation test database
+        run: |
+          if ! PGPASSWORD=motdepasse psql -h localhost -U utilisateur -d postgres \
+            -tAc "SELECT 1 FROM pg_database WHERE datname = 'if13_test_invitations'" \
+            | grep -q 1; then
+            PGPASSWORD=motdepasse createdb \
+              -h localhost \
+              -U utilisateur \
+              if13_test_invitations
+          fi
+
+      - name: Apply invitation database migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ format('{0}://{1}:{2}@localhost:5432/if13_test_invitations?schema=public', 'postgresql', 'utilisateur', 'motdepasse') }}
+          DATABASE_URL_UNPOOLED: ${{ format('{0}://{1}:{2}@localhost:5432/if13_test_invitations?schema=public', 'postgresql', 'utilisateur', 'motdepasse') }}
+
+      - name: Verify application database schema
+        run: |
+          PGPASSWORD=motdepasse psql \
+            -h localhost \
+            -U utilisateur \
+            -d bons_comptes \
+            -c 'SELECT to_regclass('"'"'public."User"'"'"'), to_regclass('"'"'public."Wallet"'"'"');'
+
       - name: Run lint
         run: npm run lint
 
@@ -80,8 +105,17 @@ jobs:
         run: npm run test:e2e
         env:
           DATABASE_URL: postgresql://utilisateur:motdepasse@localhost:5432/bons_comptes?schema=public
-          JWT_SECRET: 'secret-access-reserve-aux-tests-ci'
-          JWT_REFRESH_SECRET: 'secret-refresh-reserve-aux-tests-ci'
+          JWT_SECRET: "secret-access-reserve-aux-tests-ci"
+          JWT_REFRESH_SECRET: "secret-refresh-reserve-aux-tests-ci"
+
+      - name: Run invitation contract tests
+        run: npm run test:invitations
+        env:
+          DATABASE_URL: ${{ format('{0}://{1}:{2}@localhost:5432/if13_test_invitations?schema=public', 'postgresql', 'utilisateur', 'motdepasse') }}
+          DATABASE_URL_UNPOOLED: ${{ format('{0}://{1}:{2}@localhost:5432/if13_test_invitations?schema=public', 'postgresql', 'utilisateur', 'motdepasse') }}
+          IF13_TEST_DATABASE_URL: ${{ format('{0}://{1}:{2}@localhost:5432/if13_test_invitations?schema=public', 'postgresql', 'utilisateur', 'motdepasse') }}
+          JWT_SECRET: "if13-local-access-secret"
+          JWT_REFRESH_SECRET: "if13-local-refresh-secret"
 
   frontend:
     name: Frontend build and lint
@@ -98,7 +132,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '22.22.3'
+          node-version: "22.22.3"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -113,3 +147,6 @@ jobs:
 
       - name: Audit dependencies
         run: npm audit
+
+      - name: Run frontend tests
+        run: npm test
