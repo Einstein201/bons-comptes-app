@@ -42,6 +42,7 @@ Le front-end écoute sur [http://localhost:3001](http://localhost:3001). Le back
 
 ```bash
 npm run lint
+npm test
 npm run build
 npm audit
 ```
@@ -53,3 +54,42 @@ dans leurs dépendances transitives. Elle pourra être retirée lorsque ces outi
 utiliseront une version corrigée sans cette résolution.
 
 Le routage utilise l'App Router dans `src/app/`. Les composants réutilisables seront placés dans `src/components/`, et les appels HTTP vers le backend dans `src/services/`.
+
+## Client API et session
+
+Les appels `apiRequest` sont authentifiés par défaut : le token d'accès est
+conservé uniquement en mémoire et ajouté à l'en-tête `Authorization`.
+Les appels publics (inscription, connexion, refresh et logout) désactivent
+explicitement cette authentification.
+
+Un rejet HTTP 401 déclenche un seul renouvellement, partagé entre les requêtes
+concurrentes, puis une seule nouvelle tentative. Les erreurs réseau sont
+propagées et ne sont pas assimilées à une session expirée.
+La connexion, le renouvellement et la déconnexion utilisent `credentials: 'include'`.
+Le refresh token reste dans le cookie HTTP-only du backend, sans stockage local.
+Le backend doit autoriser l'origine du frontend et les cookies dans sa
+configuration CORS. Son cookie utilise `SameSite=Strict` : les deux applications
+doivent être sur le même site (par exemple deux sous-domaines du même domaine,
+ou `localhost` avec des ports différents). Deux domaines sans lien ne
+permettront pas la restauration de session avec cette configuration.
+
+`GET /auth/me` renvoie actuellement `{ userId }`, sans nom ni email.
+
+## Parcours d'authentification
+
+Les pages `/register` et `/login` utilisent les routes `POST /users`,
+`POST /auth/login` et `GET /auth/me`. Après inscription, l'utilisateur se
+connecte avec ses identifiants. Le formulaire de connexion accepte un chemin
+interne `next` pour revenir à la page protégée demandée; les destinations
+externes sont refusées.
+
+Le fournisseur React restaure la session au montage de l'application. Les pages
+protégées affichent un état de vérification avant d'exposer leur contenu et
+redirigent un visiteur vers la connexion. En cas d'indisponibilité réseau, elles
+proposent de réessayer au lieu de déclarer la session invalide.
+
+Le backend renvoie uniquement `{ userId }` pour `GET /auth/me`; l'en-tête
+affiche donc les actions de compte sans inventer de nom ou d'adresse email.
+La déconnexion efface toujours le token en mémoire. Si le serveur ne confirme
+pas l'opération, l'interface indique que la révocation serveur n'a pas été
+confirmée.
