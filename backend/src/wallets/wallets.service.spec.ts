@@ -371,6 +371,7 @@ describe('WalletsService.findOne', () => {
     description: 'Dépenses du voyage',
     status: 'OPEN',
     createdAt: new Date('2026-10-25T12:00:00.000Z'),
+    createdById: 'user-1',
   };
 
   function createMembership(id: string, userId: string, status: string) {
@@ -438,7 +439,14 @@ describe('WalletsService.findOne', () => {
     });
 
     expect(result).toEqual({
-      wallet,
+      wallet: {
+        id: wallet.id,
+        title: wallet.title,
+        description: wallet.description,
+        status: wallet.status,
+        createdAt: wallet.createdAt,
+        isCreator: true,
+      },
       members: {
         items: [
           {
@@ -459,6 +467,30 @@ describe('WalletsService.findOne', () => {
           },
         ],
         nextCursor: null,
+      },
+    });
+  });
+
+  it('identifies a non-creator member without exposing the creator id', async () => {
+    prisma.wallet.findUnique.mockResolvedValue(wallet);
+    prisma.walletMember.findUnique.mockResolvedValue({ status: 'MEMBER' });
+    prisma.walletMember.findMany.mockResolvedValue([]);
+
+    const result = await walletsService.findOne(wallet.id, 'user-2', {
+      limit: 20,
+    });
+
+    expect(result.wallet.isCreator).toBe(false);
+    expect(result.wallet).not.toHaveProperty('createdById');
+    expect(prisma.wallet.findUnique).toHaveBeenCalledWith({
+      where: { id: wallet.id },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        createdAt: true,
+        createdById: true,
       },
     });
   });
