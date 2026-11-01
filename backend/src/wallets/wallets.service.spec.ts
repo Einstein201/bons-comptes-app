@@ -188,6 +188,7 @@ describe('WalletsService', () => {
       expect(result.invitations.items).toEqual([
         {
           ...exposed(wallet('invited-1', '2026-10-03T00:00:00.000Z')),
+          invitationId: 'membership-1',
           invitedAt,
         },
       ]);
