@@ -274,7 +274,10 @@ describe('Wallet listing (e2e)', () => {
       expect(Object.keys(body.open.items[0]).sort()).toEqual(walletFields);
       expect(Object.keys(body.closed.items[0]).sort()).toEqual(walletFields);
       expect(Object.keys(body.invitations.items[0]).sort()).toEqual(
-        [...walletFields, 'invitedAt'].sort(),
+        [...walletFields, 'invitationId', 'invitedAt'].sort(),
+      );
+      expect(body.invitations.items[0].invitationId).toEqual(
+        expect.any(String),
       );
       expect(body.invitations.items[0].invitedAt).toBe(
         '2026-03-03T10:00:00.000Z',

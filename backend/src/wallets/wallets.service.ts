@@ -192,8 +192,10 @@ export class WalletsService {
       memberships,
       limit,
       total,
-      ({ invitedAt, wallet }) => ({
+      ({ id, invitedAt, wallet }) => ({
         ...toWalletItem(wallet, userId),
+        // L'identifiant de l'adhésion sert à répondre à l'invitation (POST /invitations/:id/accept ou decline) ; `id` reste celui du porte-monnaie.
+        invitationId: id,
         invitedAt,
       }),
       (membership) => encodeCursor(membership.invitedAt, membership.id),
