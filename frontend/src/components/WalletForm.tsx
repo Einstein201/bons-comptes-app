@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import {
   useId,
   useRef,
@@ -17,6 +18,7 @@ import styles from './WalletForm.module.css';
 const TITLE_MAX_LENGTH = 100;
 
 type CreatedWallet = {
+  id: string;
   title: string;
   pendingInvitations: number;
 };
@@ -123,6 +125,7 @@ export function WalletForm() {
       // POST /wallets n'accepte que title et description : les adresses saisies ne sont
       // pas encore envoyées. TODO : les transmettre quand l'API d'invitation existera.
       setCreated({
+        id: wallet.id,
         title: wallet.title,
         pendingInvitations: invitedEmails.length,
       });
@@ -161,7 +164,14 @@ export function WalletForm() {
             Le porte-monnaie «&nbsp;{created.title}&nbsp;» a été créé.
             {created.pendingInvitations > 0
               ? ' Les invitations ne sont pas encore prises en charge : vous pourrez inviter ces membres plus tard.'
-              : null}
+              : null}{' '}
+            <Link href={`/wallets/${created.id}`} className={styles.successLink}>
+              Ouvrir le porte-monnaie
+            </Link>
+            {' · '}
+            <Link href="/" className={styles.successLink}>
+              Mes porte-monnaie
+            </Link>
           </p>
         ) : null}
         {failure ? (
