@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
+  HttpStatus,
   Param,
   Post,
   Query,
@@ -44,5 +46,28 @@ export class InvitationsController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.invitationsService.accept(invitationId, request.user.userId);
+  }
+
+  @Post('invitations/:id/decline')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async decline(
+    @Param('id') invitationId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    await this.invitationsService.decline(invitationId, request.user.userId);
+  }
+
+  @Delete('wallets/:walletId/invitations/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async remove(
+    @Param('walletId') walletId: string,
+    @Param('id') invitationId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    await this.invitationsService.remove(
+      walletId,
+      invitationId,
+      request.user.userId,
+    );
   }
 }
