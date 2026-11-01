@@ -96,6 +96,19 @@ Les erreurs HTTP et réseau sont propagées, sans bilan de secours.
 Le backend réserve la clôture au créateur et les consultations financières aux
 membres acceptés d'un portefeuille fermé.
 
+### Écran de clôture et de bilan
+
+La page protégée `/wallets/[id]` charge d'abord le détail. Seul le créateur d'un
+porte-monnaie ouvert voit l'action de clôture, suivie d'une confirmation.
+Après clôture, le détail et les deux routes financières sont rechargés.
+Le bilan et les virements sont affichés ensemble uniquement si leurs réponses
+sont cohérentes; une erreur masque le bilan et permet de réessayer.
+
+Les montants sont affichés en dollars canadiens (`fr-CA`), à partir des centimes.
+Les soldes signés, le reste à régler et le montant encore déclarable ont des
+libellés distincts. Le bouton « Actualiser » recharge les données sans conserver
+un ancien bilan comme valide en cas d'échec.
+
 ## Parcours d'authentification
 
 Les pages `/register` et `/login` utilisent les routes `POST /users`,
