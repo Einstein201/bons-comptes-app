@@ -1,0 +1,88 @@
+.content {
+  display: grid;
+  gap: 24px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.header h1 {
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+
+.status {
+  color: var(--color-primary-strong);
+  font-weight: 600;
+}
+
+.card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 24px;
+  background: var(--color-surface-muted);
+}
+
+.card h2 {
+  margin-top: 0;
+}
+
+.card p {
+  color: var(--color-text-body);
+  line-height: 1.6;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.error {
+  padding: 16px;
+  color: var(--color-error);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  border-radius: var(--radius-control);
+}
+
+.tableScroll {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table caption {
+  text-align: left;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.table td {
+  white-space: nowrap;
+}
+
+.transfers {
+  padding: 0;
+  list-style: none;
+}
+
+.transfers li {
+  padding: 16px 0;
+  border-top: 1px solid var(--color-divider);
+}
