@@ -88,7 +88,7 @@ it('affiche les soldes signés et les deux montants distincts pour un membre', a
   });
   render(<WalletBalance walletId="wallet-1" />);
   const table = await screen.findByRole('table');
-  expect(within(table).getByText('-40,00 $')).toBeDefined();
+  expect(within(table).getByText('-40,00 €')).toBeDefined();
   expect(screen.getByText('Reste à régler :').textContent).toContain('40,00');
   expect(screen.getByText('Encore déclarable :').textContent).toContain('25,00');
   expect(screen.getByText('Bob → Alice')).toBeDefined();
@@ -156,4 +156,104 @@ it('refuse une seconde clôture pendant la requête', async () => {
   expect(mocks.closeWallet).toHaveBeenCalledTimes(1);
   resolveClose({});
   await waitFor(() => expect(screen.queryByRole('table')).not.toBeNull());
+});
+
+it.each([403, 404, 409, 500])(
+  'ne charge aucun bilan lorsque le détail est refusé (HTTP %s)', async (status) => {
+    mocks.getWallet.mockRejectedValue(new ApiError(status));
+    render(<WalletBalance walletId="wallet-1" />);
+    await screen.findByRole('alert');
+    expect(mocks.getWalletBalance).not.toHaveBeenCalled();
+    expect(mocks.getOptimizedPayments).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /Clôturer|Confirmer/ })).toBeNull();
+    expect(screen.queryByRole('table')).toBeNull();
+  },
+);
+
+it('attend les deux réponses avant de présenter le bilan', async () => {
+  let resolvePlan!: (value: typeof plan) => void;
+  mocks.getWallet.mockResolvedValue(closedDetail);
+  mocks.getOptimizedPayments.mockImplementation(() => new Promise((resolve) => {
+    resolvePlan = resolve;
+  }));
+  render(<WalletBalance walletId="wallet-1" />);
+  await waitFor(() => expect(mocks.getOptimizedPayments).toHaveBeenCalledTimes(1));
+  expect(screen.getByRole('status').textContent).toContain('Chargement');
+  expect(screen.queryByRole('table')).toBeNull();
+  resolvePlan(plan);
+  await screen.findByRole('table');
+});
+
+it('affiche des comptes réglés uniquement avec des soldes nuls', async () => {
+  mocks.getWallet.mockResolvedValue(closedDetail);
+  mocks.getWalletBalance.mockResolvedValue({
+    ...balance, transfers: [],
+    balances: balance.balances.map((member) => ({ ...member, balance: 0 })),
+  });
+  mocks.getOptimizedPayments.mockResolvedValue({ ...plan, transfers: [] });
+  render(<WalletBalance walletId="wallet-1" />);
+  await screen.findByText('Tous les comptes sont réglés.');
+  expect(screen.queryByRole('button', { name: /Clôturer|Confirmer/ })).toBeNull();
+});
+
+it('refuse un plan vide lorsque des soldes restent à régler', async () => {
+  mocks.getWallet.mockResolvedValue(closedDetail);
+  mocks.getWalletBalance.mockResolvedValue({ ...balance, transfers: [] });
+  mocks.getOptimizedPayments.mockResolvedValue({ ...plan, transfers: [] });
+  render(<WalletBalance walletId="wallet-1" />);
+  await screen.findByRole('alert');
+  expect(screen.queryByText('Tous les comptes sont réglés.')).toBeNull();
+  expect(screen.queryByRole('table')).toBeNull();
+});
+
+it('refuse des virements identiques entre routes mais différents des soldes', async () => {
+  mocks.getWallet.mockResolvedValue(closedDetail);
+  mocks.getWalletBalance.mockResolvedValue({
+    ...balance, transfers: [{ ...balance.transfers[0], amount: 3000 }],
+  });
+  mocks.getOptimizedPayments.mockResolvedValue({
+    ...plan, transfers: [{ ...plan.transfers[0], remainingAmount: 3000 }],
+  });
+  render(<WalletBalance walletId="wallet-1" />);
+  await screen.findByRole('alert');
+  expect(screen.queryByRole('table')).toBeNull();
+});
+
+it('accepte les paires initiales même lorsqu’un membre reçoit et émet un virement', async () => {
+  mocks.getWallet.mockResolvedValue(closedDetail);
+  mocks.getWalletBalance.mockResolvedValue({
+    walletId: 'wallet-1', totalAmount: 9000,
+    balances: [
+      { userId: 'alice', name: 'Alice', paidAmount: 7000, shareAmount: 3000, balance: 1000 },
+      { userId: 'bob', name: 'Bob', paidAmount: 2000, shareAmount: 3000, balance: 1000 },
+      { userId: 'carol', name: 'Carol', paidAmount: 0, shareAmount: 3000, balance: -2000 },
+    ],
+    transfers: [
+      { fromUserId: 'carol', toUserId: 'alice', amount: 2000 },
+      { fromUserId: 'alice', toUserId: 'bob', amount: 1000 },
+    ],
+  });
+  mocks.getOptimizedPayments.mockResolvedValue({
+    walletId: 'wallet-1',
+    transfers: [
+      { fromUserId: 'carol', toUserId: 'alice', initialAmount: 3000, remainingAmount: 2000, declarableAmount: 2000 },
+      { fromUserId: 'alice', toUserId: 'bob', initialAmount: 1000, remainingAmount: 1000, declarableAmount: 1000 },
+    ],
+  });
+  render(<WalletBalance walletId="wallet-1" />);
+  await screen.findByRole('table');
+  expect(screen.getByText('Alice → Bob')).toBeDefined();
+});
+
+it('confirme la clôture mais masque le bilan si son rechargement échoue', async () => {
+  mocks.getWallet.mockResolvedValueOnce(detail).mockResolvedValue(closedDetail);
+  mocks.closeWallet.mockResolvedValue({ status: 'CLOSED' });
+  mocks.getWalletBalance.mockRejectedValue(new TypeError('Network'));
+  render(<WalletBalance walletId="wallet-1" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Clôturer le porte-monnaie' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmer la clôture' }));
+  await screen.findByRole('alert');
+  expect(screen.getByRole('status').textContent).toContain('a été clôturé');
+  expect(screen.queryByRole('table')).toBeNull();
+  expect(mocks.closeWallet).toHaveBeenCalledTimes(1);
 });

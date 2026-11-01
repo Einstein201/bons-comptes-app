@@ -2,9 +2,8 @@ import { expect, it } from 'vitest';
 import { formatCents } from './money';
 
 it.each([[1234, '12,34'], [-1234, '-12,34'], [0, '0,00'], [1, '0,01']])(
-  'affiche %s centimes en dollars canadiens', (amount, expected) => {
-    expect(formatCents(amount)).toContain(expected);
-    expect(formatCents(amount)).toContain('$');
+  'affiche %s centimes en euros', (amount, expected) => {
+    expect(formatCents(amount)).toBe(`${expected}\u00a0\u20ac`);
   },
 );
 
