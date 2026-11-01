@@ -1,0 +1,5 @@
+.page {
+    width: min(800px, 100% - 32px);
+    margin-inline: auto;
+    padding-bottom: 72px;
+}
