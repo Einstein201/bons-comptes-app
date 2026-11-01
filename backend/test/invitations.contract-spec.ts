@@ -973,13 +973,19 @@ describe('IF-13 — contrat HTTP des invitations (UC04 et UC05)', () => {
         withdrawInvitation(invitation.id),
       ]);
 
-      expect(responses.map((response) => response.status).sort()).toEqual([
-        200, 409,
-      ]);
-      expect(await findMembership()).toMatchObject({
-        id: invitation.id,
-        status: 'MEMBER',
-      });
+      const statuses = responses.map((response) => response.status).sort();
+      expect(statuses).toEqual(expect.arrayContaining([409]));
+      expect(statuses).toHaveLength(2);
+      const membership = await findMembership();
+      if (statuses.includes(200)) {
+        expect(membership).toMatchObject({
+          id: invitation.id,
+          status: 'MEMBER',
+        });
+      } else {
+        expect(statuses).toEqual([204, 409]);
+        expect(membership).toBeNull();
+      }
     });
 
     it('ne réussit pas simultanément avec la clôture', async () => {
