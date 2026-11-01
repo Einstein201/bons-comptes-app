@@ -33,6 +33,7 @@ function checkFinancialData(balance: Balance, plan: OptimizedPayments): void {
   const sum = (field: 'balance' | 'paidAmount' | 'shareAmount') =>
     balance.balances.reduce((total, member) => total + BigInt(member[field]), BigInt(0));
   const pairs = new Map<string, number>();
+  const unsettled = new Map(balance.balances.map((member) => [member.userId, BigInt(member.balance)]));
   const pairKey = (from: string, to: string) => JSON.stringify([from, to]);
   let valid = members.size > 0 && members.size === balance.balances.length &&
     sum('balance') === BigInt(0) && sum('paidAmount') === BigInt(balance.totalAmount) &&
@@ -44,13 +45,17 @@ function checkFinancialData(balance: Balance, plan: OptimizedPayments): void {
       valid = false;
     }
     pairs.set(key, transfer.amount);
+    if (members.has(transfer.fromUserId) && members.has(transfer.toUserId)) {
+      unsettled.set(transfer.fromUserId, unsettled.get(transfer.fromUserId)! + BigInt(transfer.amount));
+      unsettled.set(transfer.toUserId, unsettled.get(transfer.toUserId)! - BigInt(transfer.amount));
+    }
   }
   for (const transfer of plan.transfers) {
     const key = pairKey(transfer.fromUserId, transfer.toUserId);
     if (pairs.get(key) !== transfer.remainingAmount) valid = false;
     pairs.delete(key);
   }
-  if (!valid || pairs.size !== 0) {
+  if (!valid || pairs.size !== 0 || [...unsettled.values()].some((amount) => amount !== BigInt(0))) {
     throw new Error('Le bilan et les virements sont incohérents.');
   }
 }

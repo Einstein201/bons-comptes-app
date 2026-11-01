@@ -103,11 +103,19 @@ porte-monnaie ouvert voit l'action de clôture, suivie d'une confirmation.
 Après clôture, le détail et les deux routes financières sont rechargés.
 Le bilan et les virements sont affichés ensemble uniquement si leurs réponses
 sont cohérentes; une erreur masque le bilan et permet de réessayer.
+Les virements doivent correspondre au reste à régler de chaque membre; un plan
+vide n'est présenté comme réglé que si tous les soldes sont nuls.
 
-Les montants sont affichés en dollars canadiens (`fr-CA`), à partir des centimes.
+Les montants sont affichés en euros (`EUR`, locale `fr-FR`), à partir des centimes.
 Les soldes signés, le reste à régler et le montant encore déclarable ont des
 libellés distincts. Le bouton « Actualiser » recharge les données sans conserver
 un ancien bilan comme valide en cas d'échec.
+
+Pour une vérification manuelle, ouvrir `/wallets/ID_DU_PORTEFEUILLE` avec un
+portefeuille de test : vérifier la confirmation annulable du créateur, l'absence
+de l'action pour un autre membre, puis le rechargement du bilan après clôture.
+Vérifier également les montants distincts lorsqu'un remboursement est en attente,
+un portefeuille sans dépense et le masquage du bilan après un échec d'actualisation.
 
 ## Parcours d'authentification
 

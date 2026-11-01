@@ -1,6 +1,6 @@
-const currency = new Intl.NumberFormat('fr-CA', {
+const currency = new Intl.NumberFormat('fr-FR', {
   style: 'currency',
-  currency: 'CAD',
+  currency: 'EUR',
 });
 
 export function formatCents(amount: number): string {
