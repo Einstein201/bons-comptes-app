@@ -1,4 +1,4 @@
-﻿import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ApiError, setAccessToken } from './api';
 import { acceptInvitation, getInvitations, sendInvitation } from './invitations';
 
@@ -33,7 +33,7 @@ it('envoie une invitation par email', async () => {
   expect(init?.body).toBe(JSON.stringify({ email: 'bob@example.com' }));
 });
 
-it('charge les invitations reÃ§ues avec le curseur', async () => {
+it('charge les invitations reçues avec le curseur', async () => {
   const page = { data: [invitation], nextCursor: 'next' };
   fetchMock.mockResolvedValue(Response.json(page));
 
@@ -42,7 +42,7 @@ it('charge les invitations reÃ§ues avec le curseur', async () => {
   expect(String(fetchMock.mock.calls[0][0])).toBe('http://localhost:3000/invitations?limit=5&cursor=abc');
 });
 
-it('refuse une liste dâ€™invitations invalide', async () => {
+it('refuse une liste d’invitations invalide', async () => {
   fetchMock.mockResolvedValue(Response.json({ data: [{ id: '' }], nextCursor: null }));
 
   await expect(getInvitations()).rejects.toThrow('invalide');
@@ -58,14 +58,14 @@ it('accepte une invitation avec son identifiant', async () => {
   expect(init?.method).toBe('POST');
 });
 
-it('refuse une rÃ©ponse dâ€™acceptation incohÃ©rente', async () => {
+it('refuse une réponse d’acceptation incohérente', async () => {
   fetchMock.mockResolvedValue(Response.json({ id: 'other', status: 'MEMBER' }));
 
   await expect(acceptInvitation('invitation-1')).rejects.toThrow('invalide');
 });
 
-it.each([403, 404, 409])('propage lâ€™erreur %i de lâ€™API', async (status) => {
-  fetchMock.mockResolvedValue(Response.json({ message: 'RefusÃ©' }, { status }));
+it.each([403, 404, 409])('propage l’erreur %i de l’API', async (status) => {
+  fetchMock.mockResolvedValue(Response.json({ message: 'Refusé' }, { status }));
 
   await expect(sendInvitation('wallet-1', 'bob@example.com')).rejects.toMatchObject({ status });
   await expect(sendInvitation('wallet-1', 'bob@example.com')).rejects.toBeInstanceOf(ApiError);
