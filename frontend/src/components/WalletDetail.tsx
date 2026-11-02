@@ -5,13 +5,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ApiError } from '../services/api';
 import { deleteExpense, listExpenses, type Expense } from '../services/expenses';
-import { getWalletDetails, type Wallet, type WalletMember } from '../services/wallets';
+import { getWalletDetails, type WalletWithMembers, type WalletMember } from '../services/wallets';
 import { formatCents } from '../utils/money';
 import { Button } from './Button';
 import { ExpenseForm } from './ExpenseForm';
 import { ExpenseList } from './ExpenseList';
 import { describeExpenseError, isClosedWalletError } from './expenseErrors';
 import { LockIcon, PlusIcon } from './icons';
+import { InviteMemberForm } from './InviteMemberForm';
 import styles from './WalletDetail.module.css';
 
 type Notice = { kind: 'success' | 'error'; message: string };
@@ -50,7 +51,7 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
     const { user } = useAuth();
     const currentUserId = user?.userId;
 
-    const [wallet, setWallet] = useState<Wallet>();
+    const [wallet, setWallet] = useState<WalletWithMembers['wallet']>();
     const [members, setMembers] = useState<WalletMember[]>([]);
     const [expenses, setExpenses] = useState<Expense[]>([]);
     const [totalAmount, setTotalAmount] = useState(0);
@@ -90,6 +91,12 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
 
     const isOpen = wallet?.status === 'OPEN';
     const acceptedMembers = members.filter((member) => member.status === 'MEMBER');
+
+    async function refreshMembers() {
+        const details = await getWalletDetails(walletId);
+        setWallet(details.wallet);
+        setMembers(details.members);
+    }
 
     function markWalletClosed() {
         setWallet((current) => (current ? { ...current, status: 'CLOSED' } : current));
@@ -199,6 +206,23 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
                     <span>Total des dépenses :</span>
                     <strong>{formatCents(totalAmount)}</strong>
                 </div>
+            </section>
+
+            <section className={styles.summary} aria-labelledby="members-title">
+                <h2 id="members-title" className={styles.sectionTitle}>Membres du porte-monnaie</h2>
+                <ul className={styles.memberList} aria-label="Détail des membres">
+                    {members.map((member) => (
+                        <li key={member.userId} className={styles.memberItem}>
+                            <span>{member.name}</span>
+                            <span className={styles.memberStatus}>
+                                {member.status === 'MEMBER' ? 'Membre' : 'Invitation en attente'}
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+                {wallet.isCreator && isOpen ? (
+                    <InviteMemberForm walletId={walletId} onInvited={refreshMembers} />
+                ) : null}
             </section>
 
             {!isOpen ? (
