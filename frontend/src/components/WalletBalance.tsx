@@ -11,6 +11,9 @@ import { formatCents } from '../services/money';
 import { getWallet, type WalletDetails } from '../services/wallets';
 import { Button } from './Button';
 import { RepaymentsPanel } from './RepaymentsPanel';
+import {
+  WALLET_PANEL_ID, WalletTabProvider, WalletTabs, tabId, type WalletTabId,
+} from './WalletTabs';
 import styles from './WalletBalance.module.css';
 
 type State =
@@ -72,6 +75,7 @@ export function WalletBalance({ walletId, children }: { walletId: string; childr
   const [closing, setClosing] = useState(false);
   const [actionError, setActionError] = useState<string>();
   const [notice, setNotice] = useState<string>();
+  const [selectedTab, setSelectedTab] = useState<WalletTabId>('expenses');
   const actionPending = useRef(false);
   const mounted = useRef(false);
 
@@ -129,6 +133,7 @@ export function WalletBalance({ walletId, children }: { walletId: string; childr
     try {
       await closeWallet(walletId);
       if (mounted.current) {
+        setSelectedTab('balance');
         setNotice('Le porte-monnaie a été clôturé.');
         refresh();
       }
@@ -151,6 +156,20 @@ export function WalletBalance({ walletId, children }: { walletId: string; childr
 
   const { wallet } = state.detail;
   const financial = state.financial;
+  const isOpen = wallet.status === 'OPEN';
+  const tabs: { id: WalletTabId; label: string }[] = [
+    { id: 'expenses', label: 'Dépenses' },
+    { id: 'members', label: 'Membres' },
+    ...(isOpen
+      ? [{ id: 'closure' as const, label: 'Clôture' }]
+      : financial
+        ? [
+            { id: 'balance' as const, label: 'Bilan' },
+            ...(user ? [{ id: 'repayments' as const, label: 'Remboursements' }] : []),
+          ]
+        : []),
+  ];
+  const tab = tabs.some((item) => item.id === selectedTab) ? selectedTab : 'expenses';
   const nameOf = (userId: string) =>
       financial?.balance.balances.find((member) => member.userId === userId)?.name;
 
@@ -166,8 +185,10 @@ export function WalletBalance({ walletId, children }: { walletId: string; childr
         </header>
         {notice && <p role="status">{notice}</p>}
         {actionError && <p className={styles.error} role="alert">{actionError}</p>}
-        {children}
-        {wallet.status === 'OPEN' && (
+        <WalletTabs tabs={tabs} active={tab} onChange={setSelectedTab} />
+        <div role="tabpanel" id={WALLET_PANEL_ID} aria-labelledby={tabId(tab)} className={styles.panel}>
+        <WalletTabProvider value={tab}>{children}</WalletTabProvider>
+        {tab === 'closure' && wallet.status === 'OPEN' && (
             <section className={styles.card}>
               <h2>Clôture du porte-monnaie</h2>
               <p>Le bilan sera disponible uniquement après la clôture.</p>
@@ -190,6 +211,8 @@ export function WalletBalance({ walletId, children }: { walletId: string; childr
         )}
         {wallet.status === 'CLOSED' && financial && (
             <>
+              {tab === 'balance' && (
+              <>
               <section className={styles.card}>
                 <h2>Bilan financier</h2>
                 <p>Total des dépenses : <strong>{formatCents(financial.balance.totalAmount)}</strong></p>
@@ -223,7 +246,9 @@ export function WalletBalance({ walletId, children }: { walletId: string; childr
                     ))}</ul>
                 )}
               </section>
-              {user && (
+              </>
+              )}
+              {tab === 'repayments' && user && (
                   <RepaymentsPanel
                       walletId={walletId}
                       userId={user.userId}
@@ -236,6 +261,7 @@ export function WalletBalance({ walletId, children }: { walletId: string; childr
               )}
             </>
         )}
+        </div>
       </section>
   );
 }
