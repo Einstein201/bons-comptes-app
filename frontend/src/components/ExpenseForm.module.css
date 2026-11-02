@@ -1,0 +1,114 @@
+.overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    background: rgba(36, 31, 35, 0.4);
+}
+
+.dialog {
+    width: min(480px, 100%);
+    max-height: calc(100vh - 32px);
+    overflow: auto;
+    border-radius: var(--radius-card);
+    background: var(--color-bg);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--color-divider);
+}
+
+.heading {
+    margin: 0;
+    color: var(--color-text);
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 24px;
+}
+
+.close {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--color-icon);
+    font-size: 18px;
+    cursor: pointer;
+}
+
+.close:hover:not(:disabled) {
+    background: var(--color-surface-muted);
+}
+
+.close:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.body {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 24px;
+}
+
+.row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.amountWrapper {
+    position: relative;
+}
+
+.amountWrapper input {
+    padding-right: 36px;
+}
+
+.currency {
+    position: absolute;
+    top: 50%;
+    right: 16px;
+    color: var(--color-text-muted);
+    font-size: 14px;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.alert {
+    margin: 0;
+    padding: 12px 16px;
+    border: 1px solid var(--color-error-border);
+    border-radius: var(--radius-control);
+    background: var(--color-error-bg);
+    color: var(--color-error);
+    font-size: 14px;
+    line-height: 20px;
+}
+
+.footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px;
+    border-top: 1px solid var(--color-divider);
+    background: var(--color-surface-muted);
+}
+
+@media (max-width: 480px) {
+    .row {
+        grid-template-columns: 1fr;
+    }
+}
