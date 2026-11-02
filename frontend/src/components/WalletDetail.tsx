@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ApiError } from '../services/api';
 import { deleteExpense, listExpenses, type Expense } from '../services/expenses';
@@ -60,6 +60,8 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
     const [deletingId, setDeletingId] = useState<string>();
     const [formOpen, setFormOpen] = useState(false);
     const [notice, setNotice] = useState<Notice>();
+    // Augmente à chaque ajout ou suppression réussi.
+    const mutationCount = useRef(0);
 
     useEffect(() => {
         let ignore = false; // ignore une réponse arrivée après un changement de page
@@ -102,11 +104,16 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
         if (!nextCursor || loadingMore) return;
         setLoadingMore(true);
         setNotice(undefined);
+        const countAtStart = mutationCount.current;
         try {
             const page = await listExpenses(walletId, { cursor: nextCursor });
             setExpenses((current) => mergeExpenses(current, page.items));
             setNextCursor(page.nextCursor);
-            setTotalAmount(page.totalAmount);
+            // Si un ajout ou une suppression a eu lieu pendant la requête, ce total est périmé :
+            // on garde le total local, déjà mis à jour par la mutation.
+            if (mutationCount.current === countAtStart) {
+                setTotalAmount(page.totalAmount);
+            }
         } catch (error) {
             setNotice({ kind: 'error', message: describeExpenseError(error, 'load') });
         } finally {
@@ -115,6 +122,7 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
     }
 
     function handleCreated(expense: Expense) {
+        mutationCount.current += 1;
         setFormOpen(false);
         setExpenses((current) => mergeExpenses(current, [expense]));
         setTotalAmount((total) => total + expense.amount);
@@ -122,6 +130,7 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
     }
 
     function removeFromList(expense: Expense) {
+        mutationCount.current += 1;
         setExpenses((current) => current.filter((item) => item.id !== expense.id));
         setTotalAmount((total) => total - expense.amount);
     }
