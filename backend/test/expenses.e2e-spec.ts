@@ -92,6 +92,12 @@ describe('Expenses (e2e)', () => {
       .send(body);
   }
 
+  function deleteExpense(walletId: string, expenseId: string, user: TestUser) {
+    return request(app.getHttpServer())
+      .delete(`/wallets/${walletId}/expenses/${expenseId}`)
+      .set('Authorization', 'Bearer ' + user.token);
+  }
+
   function closeWallet(walletId: string, user: TestUser) {
     return request(app.getHttpServer())
       .post(`/wallets/${walletId}/close`)
@@ -467,6 +473,27 @@ describe('Expenses (e2e)', () => {
           where: { id: expenseId },
         });
         expect(unchanged.amount).toBe(validExpense.amount);
+      },
+      15000,
+    );
+
+    it(
+      'serializes concurrent update and deletion without an unhandled error',
+      async () => {
+        const expenseId = await createEditableExpense();
+
+        const [patchResponse, deleteResponse] = await Promise.all([
+          patchExpense(openWalletId, expenseId, alice, {
+            title: 'Modification concurrente',
+          }),
+          deleteExpense(openWalletId, expenseId, alice),
+        ]);
+
+        expect([200, 404]).toContain(patchResponse.status);
+        expect(deleteResponse.status).toBe(204);
+        await expect(
+          prisma.expense.findUnique({ where: { id: expenseId } }),
+        ).resolves.toBeNull();
       },
       15000,
     );
