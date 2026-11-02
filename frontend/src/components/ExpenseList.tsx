@@ -48,16 +48,15 @@ export function ExpenseList({
                             }: ExpenseListProps) {
     const [confirmingId, setConfirmingId] = useState<string>();
 
-    if (expenses.length === 0) {
-        return (
-            <section className={styles.card}>
-                <p className={styles.empty}>Aucune dépense pour le moment.</p>
-            </section>
-        );
-    }
-
     return (
         <section className={styles.card} aria-label="Dépenses">
+            {/* Liste vide avec une page suivante (ex. après suppressions) : on garde le bouton. */}
+            {expenses.length === 0 ? (
+                <p className={styles.empty}>
+                    {hasMore ? 'Aucune dépense affichée.' : 'Aucune dépense pour le moment.'}
+                </p>
+            ) : null}
+
             {groupByMonth(expenses).map((group) => (
                 <div key={group.label}>
                     <h2 className={styles.month}>{group.label}</h2>
