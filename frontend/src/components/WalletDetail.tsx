@@ -11,7 +11,7 @@ import { Button } from './Button';
 import { ExpenseForm } from './ExpenseForm';
 import { ExpenseList } from './ExpenseList';
 import { describeExpenseError, isClosedWalletError } from './expenseErrors';
-import { ChevronLeftIcon, LockIcon, PlusIcon } from './icons';
+import { LockIcon, PlusIcon } from './icons';
 import styles from './WalletDetail.module.css';
 
 type Notice = { kind: 'success' | 'error'; message: string };
@@ -178,21 +178,8 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
 
     return (
         <div className={styles.content}>
-            <Link href="/" className={styles.back}>
-                <ChevronLeftIcon /> Accueil
-            </Link>
-
+            {/* Titre, statut et description sont affichés par WalletBalance (IF-38). */}
             <section className={styles.summary}>
-                <div className={styles.titleRow}>
-                    <h1 className={styles.title}>{wallet.title}</h1>
-                    <span className={isOpen ? styles.badgeOpen : styles.badgeClosed}>
-            {isOpen ? 'Ouvert' : 'Clôturé'}
-          </span>
-                </div>
-                {wallet.description ? (
-                    <p className={styles.description}>{wallet.description}</p>
-                ) : null}
-
                 <div className={styles.actions}>
                     <ul className={styles.avatars} aria-label="Membres">
                         {acceptedMembers.map((member) => (

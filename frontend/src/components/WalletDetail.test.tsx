@@ -172,7 +172,7 @@ describe('détail d’un porte-monnaie', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }));
 
         expect((await screen.findByRole('alert')).textContent).toContain('vient d’être clôturé');
-        expect(screen.getByText('Clôturé')).toBeTruthy();
+        expect(screen.getByRole('status').textContent).toContain('Ce porte-monnaie est clôturé');
         expect(screen.queryByRole('button', { name: /Supprimer/ })).toBeNull();
         expect(screen.queryByRole('button', { name: /Ajouter une dépense/ })).toBeNull();
     });
