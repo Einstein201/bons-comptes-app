@@ -234,6 +234,25 @@ describe('détail d’un porte-monnaie', () => {
         expect((await screen.findByRole('alert')).textContent).toContain(message);
     });
 
+    it('n’affiche plus l’ancien porte-monnaie quand l’identifiant change', async () => {
+        mocks.listExpenses.mockResolvedValueOnce({
+            items: [expense('e-1', '2025-06-12', 100, 'me', 'Courses')],
+            nextCursor: null,
+            totalAmount: 100,
+        });
+        const { rerender } = render(<WalletDetail walletId="wallet-1" />);
+        await screen.findByText('Courses');
+
+        mocks.getWalletDetails.mockReturnValue(new Promise(() => {}));
+        mocks.listExpenses.mockReturnValue(new Promise(() => {}));
+        rerender(<WalletDetail walletId="wallet-2" />);
+
+        expect(screen.getByRole('status').textContent).toContain('Chargement du porte-monnaie');
+        expect(screen.queryByText('Voyage à Lisbonne')).toBeNull();
+        expect(screen.queryByText('Courses')).toBeNull();
+        expect(mocks.getWalletDetails).toHaveBeenLastCalledWith('wallet-2');
+    });
+
     it('affiche l’erreur 400 si la page suivante est refusée', async () => {
         mocks.listExpenses
             .mockResolvedValueOnce({ items: [expense('e-1', '2025-06-12', 100)], nextCursor: 'bad', totalAmount: 200 })

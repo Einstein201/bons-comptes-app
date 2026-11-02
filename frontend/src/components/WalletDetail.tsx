@@ -41,7 +41,12 @@ function initials(name: string): string {
         .join('');
 }
 
+// La clé recrée le composant à chaque changement de porte-monnaie : tout l'état repart de zéro.
 export function WalletDetail({ walletId }: { walletId: string }) {
+    return <WalletDetailContent key={walletId} walletId={walletId} />;
+}
+
+function WalletDetailContent({ walletId }: { walletId: string }) {
     const { user } = useAuth();
     const currentUserId = user?.userId;
 
