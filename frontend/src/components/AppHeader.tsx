@@ -34,9 +34,11 @@ export function AppHeader() {
         <span className={styles.brandName}>Les bons comptes</span>
       </Link>
       <div className={styles.actions}>
-        <button type="button" className={styles.iconButton} aria-label="Notifications">
-          <BellIcon />
-        </button>
+        {status === 'authenticated' ? (
+          <Link href="/invitations" className={styles.iconButton} aria-label="Invitations reçues">
+            <BellIcon />
+          </Link>
+        ) : null}
         {status === 'authenticated' ? (
           <button type="button" className={styles.logout} onClick={handleLogout}>
             Déconnexion
