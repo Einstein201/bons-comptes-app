@@ -75,7 +75,7 @@ describe('Auth flow (e2e)', () => {
       }) => {
         passwordHash = data.password;
         sessionVersion += data.sessionVersion.increment;
-        return Promise.resolve({ id: 'user-1' });
+        return Promise.resolve({ id: 'user-1', sessionVersion });
       },
     );
   });
