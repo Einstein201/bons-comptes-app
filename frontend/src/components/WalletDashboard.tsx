@@ -63,6 +63,7 @@ const dateFormatter = new Intl.DateTimeFormat('fr-FR', {
   day: 'numeric',
   month: 'long',
   year: 'numeric',
+  timeZone: 'UTC',
 });
 
 function formatDate(value: string | null): string {
@@ -148,6 +149,7 @@ export function WalletDashboard() {
     closed: 0,
     invitations: 0,
   });
+  const initialRequest = useRef(0);
 
   const patch = useCallback((section: WalletSection, change: Partial<SectionState>) => {
     setSections((current) => ({
@@ -189,10 +191,51 @@ export function WalletDashboard() {
   );
 
   useEffect(() => {
-    void load('open', 0, [undefined]);
-    void load('closed', 0, [undefined]);
-    void load('invitations', 0, [undefined]);
-  }, [load]);
+    const request = ++initialRequest.current;
+    setSections({
+      open: INITIAL_SECTION,
+      closed: INITIAL_SECTION,
+      invitations: INITIAL_SECTION,
+    });
+
+    void listWallets({ limit: PAGE_SIZE })
+      .then((lists) => {
+        if (initialRequest.current !== request) return;
+
+        setTotals({
+          open: lists.open.total,
+          closed: lists.closed.total,
+          invitations: lists.invitations.total,
+        });
+        setSections({
+          open: { page: lists.open, cursors: [undefined], index: 0, loading: false },
+          closed: { page: lists.closed, cursors: [undefined], index: 0, loading: false },
+          invitations: {
+            page: lists.invitations,
+            cursors: [undefined],
+            index: 0,
+            loading: false,
+          },
+        });
+      })
+      .catch((error: unknown) => {
+        if (initialRequest.current !== request) return;
+        if (!(error instanceof ApiError) && !(error instanceof TypeError)) {
+          console.error(error);
+        }
+
+        const message = describeError(error);
+        setSections({
+          open: { cursors: [undefined], index: 0, loading: false, error: message },
+          closed: { cursors: [undefined], index: 0, loading: false, error: message },
+          invitations: { cursors: [undefined], index: 0, loading: false, error: message },
+        });
+      });
+
+    return () => {
+      initialRequest.current += 1;
+    };
+  }, []);
 
   const state = sections[active];
   const page = state.page;
