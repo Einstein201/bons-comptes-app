@@ -117,6 +117,12 @@ La pagination par curseur ne permet pas de sauter à une page donnée : l'interf
 
 Une migration ajoute l'index `WalletMember(userId, status)` utilisé par ces requêtes.
 
+### Détail d'un porte-monnaie
+
+`GET /wallets/:id` nécessite un jeton d'accès et une adhésion `MEMBER`. La réponse contient `wallet` (`id`, `title`, `description`, `status`, `createdAt`, `isCreator`) et `members` (`items`, `nextCursor`).
+
+`wallet.isCreator` indique si l'utilisateur authentifié est le créateur, sans exposer `createdById`. L'interface peut ainsi afficher l'action de clôture uniquement pour le créateur d'un porte-monnaie `OPEN`. Ce champ ne remplace pas le contrôle des droits effectué par `POST /wallets/:id/close`.
+
 ---
 
 ##  Exécution de l'application
