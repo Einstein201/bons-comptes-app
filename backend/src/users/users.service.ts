@@ -10,6 +10,10 @@ export interface CreateUserInput {
   password: string;
 }
 
+export interface UpdateProfileInput {
+  name: string;
+}
+
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -42,13 +46,22 @@ export class UsersService {
       });
     } catch (error) {
       if (this.isEmailConflict(error)) {
-        throw new ConflictException(
-          'Cette adresse email est déjà utilisée.',
-        );
+        throw new ConflictException('Cette adresse email est déjà utilisée.');
       }
 
       throw error;
     }
+  }
+
+  async updateProfile(userId: string, input: UpdateProfileInput) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { name: input.name },
+      select: {
+        id: true,
+        name: true,
+      },
+    });
   }
 
   private isEmailConflict(error: unknown): boolean {
