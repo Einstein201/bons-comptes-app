@@ -10,6 +10,7 @@ describe('UsersService', () => {
     user: {
       findUnique: Mock;
       create: Mock;
+      update: Mock;
     };
   };
 
@@ -18,6 +19,7 @@ describe('UsersService', () => {
       user: {
         findUnique: vi.fn(),
         create: vi.fn(),
+        update: vi.fn(),
       },
     };
 
@@ -98,5 +100,21 @@ describe('UsersService', () => {
         password: 'motdepasse123',
       }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('updates only the authenticated user name without returning sensitive data', async () => {
+    const updatedUser = { id: 'user-123', name: 'Alice mise à jour' };
+    prisma.user.update.mockResolvedValue(updatedUser);
+
+    await expect(
+      usersService.updateProfile('user-123', { name: updatedUser.name }),
+    ).resolves.toEqual(updatedUser);
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-123' },
+      data: { name: updatedUser.name },
+      select: { id: true, name: true },
+    });
+    expect(updatedUser).not.toHaveProperty('password');
   });
 });
