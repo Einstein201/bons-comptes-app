@@ -12,18 +12,35 @@ import { REFRESH_COOKIE, REFRESH_MAX_AGE_MS } from './auth.constants.js';
 
 describe('AuthService', () => {
   let service: AuthService;
-  let prismaMock: { user: { findUnique: ReturnType<typeof vi.fn> } };
-  let jwtMock: { sign: ReturnType<typeof vi.fn>; verify: ReturnType<typeof vi.fn> };
+  let prismaMock: {
+    user: {
+      findUnique: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+    };
+  };
+  let jwtMock: {
+    sign: ReturnType<typeof vi.fn>;
+    verify: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(async () => {
-    prismaMock = { user: { findUnique: vi.fn().mockResolvedValue(null) } };
+    prismaMock = {
+      user: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        update: vi.fn(),
+      },
+    };
     jwtMock = {
       sign: vi.fn((payload: { tokenType: string }) =>
-        payload.tokenType === 'access' ? 'fake-access-token' : 'fake-refresh-token',
+        payload.tokenType === 'access'
+          ? 'fake-access-token'
+          : 'fake-refresh-token',
       ),
       verify: vi.fn(),
     };
-    const configMock = { getOrThrow: vi.fn().mockReturnValue('refresh-secret') };
+    const configMock = {
+      getOrThrow: vi.fn().mockReturnValue('refresh-secret'),
+    };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -54,6 +71,7 @@ describe('AuthService', () => {
       id: '1',
       email: 'angela@gmail.com',
       password: await bcrypt.hash('motdepassecorrect', 10),
+      sessionVersion: 0,
     });
 
     await expect(
@@ -69,6 +87,7 @@ describe('AuthService', () => {
       id: '1',
       email: 'angela@gmail.com',
       password: await bcrypt.hash('bon', 10),
+      sessionVersion: 0,
     });
     const wrong = await service
       .login({ email: 'angela@gmail.com', password: 'mauvais' })
@@ -77,33 +96,44 @@ describe('AuthService', () => {
     expect(unknown.message).toBe(wrong.message);
   });
 
-it('accepte une connexion correcte et renvoie les deux tokens', async () => {
-  prismaMock.user.findUnique.mockResolvedValue({
-    id: '1',
-    email: 'angela@gmail.com',
-    password: await bcrypt.hash('motdepassecorrect', 10),
-  });
+  it('accepte une connexion correcte et renvoie les deux tokens', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: '1',
+      email: 'angela@gmail.com',
+      password: await bcrypt.hash('motdepassecorrect', 10),
+      sessionVersion: 0,
+    });
 
-  await expect(
-    service.login({ email: 'angela@gmail.com', password: 'motdepassecorrect' }),
-  ).resolves.toEqual({
-    accessToken: 'fake-access-token',
-    refreshToken: 'fake-refresh-token',
-  });
+    await expect(
+      service.login({
+        email: 'angela@gmail.com',
+        password: 'motdepassecorrect',
+      }),
+    ).resolves.toEqual({
+      accessToken: 'fake-access-token',
+      refreshToken: 'fake-refresh-token',
+    });
 
-  expect(jwtMock.sign).toHaveBeenCalledWith(
-    expect.objectContaining({ sub: '1', tokenType: 'access' }),
-    expect.objectContaining({ expiresIn: '1h' }),
-  );
-  expect(jwtMock.sign).toHaveBeenCalledWith(
-    expect.objectContaining({ sub: '1', tokenType: 'refresh' }),
-    expect.objectContaining({ expiresIn: '7d' }),
-  );
-});
+    expect(jwtMock.sign).toHaveBeenCalledWith(
+      expect.objectContaining({ sub: '1', tokenType: 'access' }),
+      expect.objectContaining({ expiresIn: '1h' }),
+    );
+    expect(jwtMock.sign).toHaveBeenCalledWith(
+      expect.objectContaining({ sub: '1', tokenType: 'refresh' }),
+      expect.objectContaining({ expiresIn: '7d' }),
+    );
+  });
 
   it('refresh : émet de nouveaux tokens pour un refresh token valide', async () => {
-    jwtMock.verify.mockReturnValue({ sub: '1', tokenType: 'refresh' });
-    prismaMock.user.findUnique.mockResolvedValue({ id: '1' });
+    jwtMock.verify.mockReturnValue({
+      sub: '1',
+      tokenType: 'refresh',
+      sessionVersion: 0,
+    });
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: '1',
+      sessionVersion: 0,
+    });
 
     await expect(service.refresh('valid')).resolves.toEqual({
       accessToken: 'fake-access-token',
@@ -112,20 +142,32 @@ it('accepte une connexion correcte et renvoie les deux tokens', async () => {
   });
 
   it('refresh : refuse un cookie absent, invalide ou de mauvais type', async () => {
-    await expect(service.refresh(undefined)).rejects.toThrow(UnauthorizedException);
+    await expect(service.refresh(undefined)).rejects.toThrow(
+      UnauthorizedException,
+    );
 
-    jwtMock.verify.mockImplementation(() => { throw new Error('expired'); });
+    jwtMock.verify.mockImplementation(() => {
+      throw new Error('expired');
+    });
     await expect(service.refresh('bad')).rejects.toThrow(UnauthorizedException);
 
     jwtMock.verify.mockReturnValue({ sub: '1', tokenType: 'access' });
-    await expect(service.refresh('access-token')).rejects.toThrow(UnauthorizedException);
+    await expect(service.refresh('access-token')).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 
   it('refresh : refuse si l’utilisateur n’existe plus', async () => {
-    jwtMock.verify.mockReturnValue({ sub: '1', tokenType: 'refresh' });
+    jwtMock.verify.mockReturnValue({
+      sub: '1',
+      tokenType: 'refresh',
+      sessionVersion: 0,
+    });
     prismaMock.user.findUnique.mockResolvedValue(null);
 
-    await expect(service.refresh('valid')).rejects.toThrow(UnauthorizedException);
+    await expect(service.refresh('valid')).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 
   it('logout efface le cookie du refresh token', () => {
@@ -133,19 +175,82 @@ it('accepte une connexion correcte et renvoie les deux tokens', async () => {
 
     const result = service.logout(res as any);
 
-    expect(res.clearCookie).toHaveBeenCalledWith(REFRESH_COOKIE, expect.objectContaining({ path: '/auth' }));
+    expect(res.clearCookie).toHaveBeenCalledWith(
+      REFRESH_COOKIE,
+      expect.objectContaining({ path: '/auth' }),
+    );
     expect(result).toEqual({ message: 'Logout successful' });
   });
-it('setRefreshCookie pose un cookie httpOnly de 7 jours', () => {
-  const res = { cookie: vi.fn() };
 
-  service.setRefreshCookie(res as unknown as Response, 'tok');
+  it('modifie le mot de passe après vérification et révoque les refresh tokens', async () => {
+    const currentHash = await bcrypt.hash('ancien-mot-de-passe', 10);
+    prismaMock.user.findUnique.mockResolvedValue({ password: currentHash });
+    prismaMock.user.update.mockResolvedValue({ id: '1' });
 
-  expect(res.cookie).toHaveBeenCalledWith(
-    REFRESH_COOKIE,
-    'tok',
-    expect.objectContaining({ httpOnly: true, sameSite: 'strict', maxAge: REFRESH_MAX_AGE_MS }),
-  );
-});
-  
+    await expect(
+      service.changePassword('1', {
+        currentPassword: 'ancien-mot-de-passe',
+        newPassword: 'nouveau-mot-de-passe',
+      }),
+    ).resolves.toEqual({ message: 'Mot de passe modifié avec succès.' });
+
+    expect(prismaMock.user.update).toHaveBeenCalledWith({
+      where: { id: '1' },
+      data: {
+        password: expect.stringMatching(/^\$2[aby]\$10\$/),
+        sessionVersion: { increment: 1 },
+      },
+    });
+    const update = prismaMock.user.update.mock.calls[0][0];
+    expect(
+      await bcrypt.compare('nouveau-mot-de-passe', update.data.password),
+    ).toBe(true);
+    expect(update.data.password).not.toBe('nouveau-mot-de-passe');
+  });
+
+  it('refuse un mot de passe actuel incorrect sans modifier le compte', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      password: await bcrypt.hash('ancien-mot-de-passe', 10),
+    });
+
+    await expect(
+      service.changePassword('1', {
+        currentPassword: 'incorrect',
+        newPassword: 'nouveau-mot-de-passe',
+      }),
+    ).rejects.toThrow(UnauthorizedException);
+
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it('refuse un refresh token dont la version de session est obsolète', async () => {
+    jwtMock.verify.mockReturnValue({
+      sub: '1',
+      tokenType: 'refresh',
+      sessionVersion: 0,
+    });
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: '1',
+      sessionVersion: 1,
+    });
+
+    await expect(service.refresh('old-token')).rejects.toThrow(
+      UnauthorizedException,
+    );
+  });
+  it('setRefreshCookie pose un cookie httpOnly de 7 jours', () => {
+    const res = { cookie: vi.fn() };
+
+    service.setRefreshCookie(res as unknown as Response, 'tok');
+
+    expect(res.cookie).toHaveBeenCalledWith(
+      REFRESH_COOKIE,
+      'tok',
+      expect.objectContaining({
+        httpOnly: true,
+        sameSite: 'strict',
+        maxAge: REFRESH_MAX_AGE_MS,
+      }),
+    );
+  });
 });
