@@ -135,19 +135,24 @@ export class ExpensesService {
 
   async remove(walletId: string, expenseId: string, userId: string) {
     await this.prisma.$transaction(async (transaction) => {
+      const lockedWallets = await transaction.$queryRaw<{ status: string }[]>`
+        SELECT "status" FROM "Wallet" WHERE "id" = ${walletId} FOR UPDATE`;
+      const wallet = lockedWallets[0];
+
+      if (!wallet) {
+        throw new NotFoundException('Porte-monnaie introuvable.');
+      }
+
       const expense = await transaction.expense.findFirst({
         where: { id: expenseId, walletId },
-        select: {
-          paidById: true,
-          wallet: { select: { status: true } },
-        },
+        select: { paidById: true },
       });
 
       if (!expense) {
         throw new NotFoundException('Dépense introuvable.');
       }
 
-      if (expense.wallet.status !== 'OPEN') {
+      if (wallet.status !== 'OPEN') {
         throw new ConflictException('Ce porte-monnaie est fermé.');
       }
 

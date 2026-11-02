@@ -328,19 +328,20 @@ describe('ExpensesService.remove', () => {
   let expensesService: ExpensesService;
   let prisma: { $transaction: Mock };
   let transaction: {
+    $queryRaw: Mock;
     expense: { findFirst: Mock; delete: Mock };
     wallet: { update: Mock };
   };
 
-  function givenExpense(paidById: string, walletStatus = 'OPEN') {
+  function givenExpense(paidById: string) {
     transaction.expense.findFirst.mockResolvedValue({
       paidById,
-      wallet: { status: walletStatus },
     });
   }
 
   beforeEach(() => {
     transaction = {
+      $queryRaw: vi.fn().mockResolvedValue([{ status: 'OPEN' }]),
       expense: { findFirst: vi.fn(), delete: vi.fn() },
       wallet: { update: vi.fn() },
     };
@@ -359,6 +360,18 @@ describe('ExpensesService.remove', () => {
       expect.objectContaining({
         where: { id: 'expense-1', walletId: 'wallet-1' },
       }),
+    );
+  });
+
+  it('locks the wallet before reading the expense', async () => {
+    givenExpense('user-1');
+
+    await expensesService.remove('wallet-1', 'expense-1', 'user-1');
+
+    const [sqlParts] = transaction.$queryRaw.mock.calls[0];
+    expect(sqlParts.join('')).toContain('FOR UPDATE');
+    expect(transaction.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      transaction.expense.findFirst.mock.invocationCallOrder[0],
     );
   });
 
@@ -385,8 +398,18 @@ describe('ExpensesService.remove', () => {
     expect(transaction.expense.delete).not.toHaveBeenCalled();
   });
 
+  it('throws NotFoundException when the wallet does not exist', async () => {
+    transaction.$queryRaw.mockResolvedValue([]);
+
+    await expect(
+      expensesService.remove('unknown', 'expense-1', 'user-1'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(transaction.expense.findFirst).not.toHaveBeenCalled();
+  });
+
   it('throws ConflictException when the wallet is closed', async () => {
-    givenExpense('user-1', 'CLOSED');
+    transaction.$queryRaw.mockResolvedValue([{ status: 'CLOSED' }]);
+    givenExpense('user-1');
 
     await expect(
       expensesService.remove('wallet-1', 'expense-1', 'user-1'),
