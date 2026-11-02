@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import { ApiError } from '../services/api';
 import { createExpense, type Expense } from '../services/expenses';
 import { todayIsoDate } from '../utils/dates';
@@ -8,6 +8,7 @@ import { parseAmountToCents } from '../utils/money';
 import { Button } from './Button';
 import { Field } from './Field';
 import { CloseIcon } from './icons';
+import { Modal } from './Modal';
 import { describeExpenseError, isClosedWalletError } from './expenseErrors';
 import styles from './ExpenseForm.module.css';
 
@@ -58,14 +59,6 @@ export function ExpenseForm({
     const [failure, setFailure] = useState<string>();
     const [submitting, setSubmitting] = useState(false);
 
-    useEffect(() => {
-        function handleKeyDown(event: KeyboardEvent) {
-            if (event.key === 'Escape' && !submitting) onClose();
-        }
-        document.addEventListener('keydown', handleKeyDown);
-        return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [onClose, submitting]);
-
     async function handleSubmit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         if (submitting) return;
@@ -99,7 +92,7 @@ export function ExpenseForm({
     }
 
     return (
-        <div className={styles.overlay}>
+        <Modal onClose={onClose} closeDisabled={submitting}>
             <form
                 className={styles.dialog}
                 role="dialog"
@@ -138,7 +131,7 @@ export function ExpenseForm({
                                 autoComplete="off"
                                 aria-required="true"
                                 readOnly={submitting}
-                                autoFocus
+                                data-autofocus
                             />
                         )}
                     </Field>
@@ -207,6 +200,6 @@ export function ExpenseForm({
                     </Button>
                 </footer>
             </form>
-        </div>
+        </Modal>
     );
 }
