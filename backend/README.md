@@ -117,6 +117,17 @@ La pagination par curseur ne permet pas de sauter à une page donnée : l'interf
 
 Une migration ajoute l'index `WalletMember(userId, status)` utilisé par ces requêtes.
 
+### Modification d'une dépense
+
+`PATCH /wallets/:walletId/expenses/:expenseId` nécessite un jeton d'accès et
+accepte un ou deux champs : `title` (chaîne non vide de 100 caractères maximum)
+et `amount` (entier positif en centimes). Seul le payeur peut modifier une
+dépense d'un porte-monnaie ouvert. `date` représente le jour de l'achat et ne
+peut pas être modifiée par cette route; `paidById` et `createdById` ne sont pas
+acceptés. Un changement de montant est refusé avec HTTP 409 si la dépense a déjà
+des parts (`ExpenseSplit`), car aucune règle de répartition automatique n'est
+définie. La réponse contient la dépense mise à jour et conserve sa date d'achat.
+
 ---
 
 ##  Exécution de l'application
