@@ -3,6 +3,11 @@
   gap: 24px;
 }
 
+.panel {
+  display: grid;
+  gap: 24px;
+}
+
 .header {
   display: flex;
   align-items: center;
