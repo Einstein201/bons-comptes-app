@@ -1,4 +1,4 @@
-import { IsByteLength, IsNotEmpty, IsString } from 'class-validator';
+import { IsByteLength, IsNotEmpty, IsString, MinLength } from 'class-validator';
 
 export class ChangePasswordDto {
   @IsString()
@@ -8,6 +8,7 @@ export class ChangePasswordDto {
 
   @IsString()
   @IsNotEmpty()
-  @IsByteLength(8, 72)
+  @MinLength(8)
+  @IsByteLength(1, 72)
   newPassword: string;
 }

@@ -141,6 +141,22 @@ describe('AuthService', () => {
     });
   });
 
+  it('refresh : accepte un ancien token sans sessionVersion comme version 0', async () => {
+    jwtMock.verify.mockReturnValue({
+      sub: '1',
+      tokenType: 'refresh',
+    });
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: '1',
+      sessionVersion: 0,
+    });
+
+    await expect(service.refresh('legacy-token')).resolves.toEqual({
+      accessToken: 'fake-access-token',
+      refreshToken: 'fake-refresh-token',
+    });
+  });
+
   it('refresh : refuse un cookie absent, invalide ou de mauvais type', async () => {
     await expect(service.refresh(undefined)).rejects.toThrow(
       UnauthorizedException,
@@ -153,6 +169,15 @@ describe('AuthService', () => {
 
     jwtMock.verify.mockReturnValue({ sub: '1', tokenType: 'access' });
     await expect(service.refresh('access-token')).rejects.toThrow(
+      UnauthorizedException,
+    );
+
+    jwtMock.verify.mockReturnValue({
+      sub: '1',
+      tokenType: 'refresh',
+      sessionVersion: null,
+    });
+    await expect(service.refresh('invalid-version')).rejects.toThrow(
       UnauthorizedException,
     );
   });

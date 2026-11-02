@@ -1,4 +1,3 @@
-
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -20,7 +19,10 @@ const INVALID_CREDENTIALS = 'Email ou mot de passe incorrect';
 @Injectable()
 export class AuthService {
   // Calculé une seule fois au démarrage
-  private readonly dummyHash = bcrypt.hashSync('mot-de-passe-factice', BCRYPT_ROUNDS);
+  private readonly dummyHash = bcrypt.hashSync(
+    'mot-de-passe-factice',
+    BCRYPT_ROUNDS,
+  );
 
   constructor(
     private readonly prisma: PrismaService,
@@ -29,8 +31,13 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto) {
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
-    const isMatch = await this.verifyPassword(dto.password, user?.password ?? this.dummyHash);
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+    const isMatch = await this.verifyPassword(
+      dto.password,
+      user?.password ?? this.dummyHash,
+    );
 
     if (!user || !isMatch) {
       throw new UnauthorizedException(INVALID_CREDENTIALS);
@@ -68,7 +75,8 @@ export class AuthService {
   }
 
   async refresh(refreshToken: string | undefined) {
-    if (!refreshToken) throw new UnauthorizedException('Refresh token manquant');
+    if (!refreshToken)
+      throw new UnauthorizedException('Refresh token manquant');
 
     let payload: {
       sub?: unknown;
@@ -85,17 +93,26 @@ export class AuthService {
     if (
       payload.tokenType !== 'refresh' ||
       typeof payload.sub !== 'string' ||
-      payload.sub.trim() === '' ||
-      typeof payload.sessionVersion !== 'number' ||
-      !Number.isInteger(payload.sessionVersion) ||
-      payload.sessionVersion < 0
+      payload.sub.trim() === ''
+    ) {
+      throw new UnauthorizedException('Refresh token invalide ou expiré');
+    }
+    const tokenSessionVersion =
+      payload.sessionVersion === undefined ? 0 : payload.sessionVersion;
+    if (
+      typeof tokenSessionVersion !== 'number' ||
+      !Number.isInteger(tokenSessionVersion) ||
+      tokenSessionVersion < 0
     ) {
       throw new UnauthorizedException('Refresh token invalide ou expiré');
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
-    if (!user) throw new UnauthorizedException('Refresh token invalide ou expiré');
-    if (user.sessionVersion !== payload.sessionVersion) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+    });
+    if (!user)
+      throw new UnauthorizedException('Refresh token invalide ou expiré');
+    if (user.sessionVersion !== tokenSessionVersion) {
       throw new UnauthorizedException('Refresh token invalide ou expiré');
     }
 
@@ -112,7 +129,10 @@ export class AuthService {
 
   logout(res: Response) {
     // Pas de maxAge ici : clearCookie fixe lui-même une expiration passée
-    res.clearCookie(REFRESH_COOKIE, refreshCookieBase(process.env.NODE_ENV === 'production'));
+    res.clearCookie(
+      REFRESH_COOKIE,
+      refreshCookieBase(process.env.NODE_ENV === 'production'),
+    );
     return { message: 'Logout successful' };
   }
 
@@ -123,7 +143,10 @@ export class AuthService {
     );
     const refreshToken = this.jwtService.sign(
       { sub: userId, tokenType: 'refresh', sessionVersion },
-      { secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'), expiresIn: '7d' },
+      {
+        secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
+        expiresIn: '7d',
+      },
     );
     return { accessToken, refreshToken };
   }
