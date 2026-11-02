@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -10,6 +10,7 @@ describe('UsersService', () => {
     user: {
       findUnique: Mock;
       create: Mock;
+      update: Mock;
     };
   };
 
@@ -18,6 +19,7 @@ describe('UsersService', () => {
       user: {
         findUnique: vi.fn(),
         create: vi.fn(),
+        update: vi.fn(),
       },
     };
 
@@ -98,5 +100,34 @@ describe('UsersService', () => {
         password: 'motdepasse123',
       }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('updates only the authenticated user name without returning sensitive data', async () => {
+    const updatedUser = { id: 'user-123', name: 'Alice mise à jour' };
+    prisma.user.update.mockResolvedValue(updatedUser);
+
+    await expect(
+      usersService.updateProfile('user-123', { name: updatedUser.name }),
+    ).resolves.toEqual({ userId: updatedUser.id, name: updatedUser.name });
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-123' },
+      data: { name: updatedUser.name },
+      select: { id: true, name: true },
+    });
+    expect(updatedUser).not.toHaveProperty('password');
+  });
+
+  it('returns unauthorized when the authenticated account no longer exists', async () => {
+    prisma.user.update.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Record to update not found.', {
+        code: 'P2025',
+        clientVersion: '5.22.0',
+      }),
+    );
+
+    await expect(
+      usersService.updateProfile('deleted-user', { name: 'Alice' }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });
