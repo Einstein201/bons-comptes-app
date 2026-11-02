@@ -128,7 +128,7 @@ describe('Auth flow (e2e)', () => {
       login.headers['set-cookie'] as unknown as string[]
     )[0].split(';')[0];
 
-    await request(server)
+    const changed = await request(server)
       .post('/auth/change-password')
       .set('Authorization', `Bearer ${login.body.accessToken}`)
       .send({
@@ -136,7 +136,21 @@ describe('Auth flow (e2e)', () => {
         newPassword: 'nouveau-motdepasse',
       })
       .expect(200)
-      .expect({ message: 'Mot de passe modifié avec succès.' });
+      .expect(({ body }) => {
+        expect(body).toEqual({
+          message: 'Mot de passe modifié avec succès.',
+          accessToken: expect.any(String),
+        });
+      });
+
+    const newRefreshCookie = (
+      changed.headers['set-cookie'] as unknown as string[]
+    )[0].split(';')[0];
+
+    await request(server)
+      .post('/auth/refresh')
+      .set('Cookie', newRefreshCookie)
+      .expect(200);
 
     await request(server)
       .post('/auth/refresh')

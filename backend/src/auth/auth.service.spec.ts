@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -209,7 +209,10 @@ describe('AuthService', () => {
 
   it('modifie le mot de passe après vérification et révoque les refresh tokens', async () => {
     const currentHash = await bcrypt.hash('ancien-mot-de-passe', 10);
-    prismaMock.user.findUnique.mockResolvedValue({ password: currentHash });
+    prismaMock.user.findUnique.mockResolvedValue({
+      password: currentHash,
+      sessionVersion: 0,
+    });
     prismaMock.user.update.mockResolvedValue({ id: '1' });
 
     await expect(
@@ -217,7 +220,15 @@ describe('AuthService', () => {
         currentPassword: 'ancien-mot-de-passe',
         newPassword: 'nouveau-mot-de-passe',
       }),
-    ).resolves.toEqual({ message: 'Mot de passe modifié avec succès.' });
+    ).resolves.toEqual({
+      message: 'Mot de passe modifié avec succès.',
+      accessToken: 'fake-access-token',
+      refreshToken: 'fake-refresh-token',
+    });
+    expect(jwtMock.sign).toHaveBeenCalledWith(
+      { sub: '1', tokenType: 'refresh', sessionVersion: 1 },
+      expect.objectContaining({ expiresIn: '7d' }),
+    );
 
     expect(prismaMock.user.update).toHaveBeenCalledWith({
       where: { id: '1' },
@@ -236,6 +247,7 @@ describe('AuthService', () => {
   it('refuse un mot de passe actuel incorrect sans modifier le compte', async () => {
     prismaMock.user.findUnique.mockResolvedValue({
       password: await bcrypt.hash('ancien-mot-de-passe', 10),
+      sessionVersion: 0,
     });
 
     await expect(
@@ -243,7 +255,7 @@ describe('AuthService', () => {
         currentPassword: 'incorrect',
         newPassword: 'nouveau-mot-de-passe',
       }),
-    ).rejects.toThrow(UnauthorizedException);
+    ).rejects.toThrow(BadRequestException);
 
     expect(prismaMock.user.update).not.toHaveBeenCalled();
   });

@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcryptjs';
@@ -48,14 +52,14 @@ export class AuthService {
   async changePassword(userId: string, dto: ChangePasswordDto) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { password: true },
+      select: { password: true, sessionVersion: true },
     });
 
-    if (
-      !user ||
-      !(await this.verifyPassword(dto.currentPassword, user.password))
-    ) {
+    if (!user) {
       throw new UnauthorizedException(INVALID_CREDENTIALS);
+    }
+    if (!(await this.verifyPassword(dto.currentPassword, user.password))) {
+      throw new BadRequestException('Mot de passe actuel incorrect');
     }
 
     const password = await bcrypt.hash(dto.newPassword, BCRYPT_ROUNDS);
@@ -67,7 +71,11 @@ export class AuthService {
       },
     });
 
-    return { message: 'Mot de passe modifié avec succès.' };
+    const tokens = this.issueTokens(userId, user.sessionVersion + 1);
+    return {
+      message: 'Mot de passe modifié avec succès.',
+      ...tokens,
+    };
   }
 
   private verifyPassword(plain: string, hash: string): Promise<boolean> {
