@@ -8,12 +8,22 @@ import { WalletBalance } from './WalletBalance';
 const mocks = vi.hoisted(() => ({
   getWallet: vi.fn(), closeWallet: vi.fn(),
   getWalletBalance: vi.fn(), getOptimizedPayments: vi.fn(),
+  getRepayments: vi.fn(),
+}));
+vi.mock('../contexts/AuthContext', () => ({
+  useAuth: () => ({ user: { userId: 'alice' } }),
 }));
 vi.mock('../services/wallets', () => ({ getWallet: mocks.getWallet }));
 vi.mock('../services/closure', () => ({
   closeWallet: mocks.closeWallet,
   getWalletBalance: mocks.getWalletBalance,
   getOptimizedPayments: mocks.getOptimizedPayments,
+}));
+vi.mock('../services/repayments', () => ({
+  cancelRepayment: vi.fn(),
+  confirmRepayment: vi.fn(),
+  declareRepayment: vi.fn(),
+  getRepayments: mocks.getRepayments,
 }));
 
 const detail = {
@@ -42,6 +52,7 @@ beforeEach(() => {
   mocks.getWallet.mockResolvedValue(detail);
   mocks.getWalletBalance.mockResolvedValue(balance);
   mocks.getOptimizedPayments.mockResolvedValue(plan);
+  mocks.getRepayments.mockResolvedValue({ items: [], nextCursor: null });
 });
 afterEach(cleanup);
 
