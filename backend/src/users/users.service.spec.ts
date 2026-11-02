@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -108,7 +108,7 @@ describe('UsersService', () => {
 
     await expect(
       usersService.updateProfile('user-123', { name: updatedUser.name }),
-    ).resolves.toEqual(updatedUser);
+    ).resolves.toEqual({ userId: updatedUser.id, name: updatedUser.name });
 
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: 'user-123' },
@@ -116,5 +116,18 @@ describe('UsersService', () => {
       select: { id: true, name: true },
     });
     expect(updatedUser).not.toHaveProperty('password');
+  });
+
+  it('returns unauthorized when the authenticated account no longer exists', async () => {
+    prisma.user.update.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Record to update not found.', {
+        code: 'P2025',
+        clientVersion: '5.22.0',
+      }),
+    );
+
+    await expect(
+      usersService.updateProfile('deleted-user', { name: 'Alice' }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });
