@@ -50,14 +50,14 @@ function describeFailure(error: unknown): SubmitFailure {
 
     if (error.status === 400) {
       const titleRejected = error.messages.some((message) =>
-        message.startsWith('title '),
+          message.startsWith('title '),
       );
 
       return {
         message: 'Certaines informations sont invalides. Vérifiez le formulaire.',
         titleError: titleRejected
-          ? `Le nom est invalide (${TITLE_MAX_LENGTH} caractères maximum).`
-          : undefined,
+            ? `Le nom est invalide (${TITLE_MAX_LENGTH} caractères maximum).`
+            : undefined,
       };
     }
 
@@ -68,7 +68,7 @@ function describeFailure(error: unknown): SubmitFailure {
   if (error instanceof TypeError) {
     return {
       message:
-        'Impossible de joindre le serveur. Vérifiez votre connexion puis réessayez.',
+          'Impossible de joindre le serveur. Vérifiez votre connexion puis réessayez.',
     };
   }
 
@@ -89,7 +89,7 @@ export function WalletForm() {
   const invitesTitleId = useId();
 
   const titleError =
-    serverTitleError ?? (titleTouched ? validateTitle(title) : undefined);
+      serverTitleError ?? (titleTouched ? validateTitle(title) : undefined);
 
   function handleTitleChange(event: ChangeEvent<HTMLInputElement>) {
     setTitle(event.target.value);
@@ -148,16 +148,16 @@ export function WalletForm() {
   }
 
   return (
-    <form
-      className={styles.card}
-      onSubmit={handleSubmit}
-      noValidate
-      aria-busy={submitting}
-    >
-      <div className={styles.body}>
-        <h2 className={styles.title}>
-          Créer un nouveau <span className={styles.nowrap}>porte-monnaie</span>
-        </h2>
+      <form
+          className={styles.card}
+          onSubmit={handleSubmit}
+          noValidate
+          aria-busy={submitting}
+      >
+        <div className={styles.body}>
+          <h2 className={styles.title}>
+            Créer un nouveau <span className={styles.nowrap}>porte-monnaie</span>
+          </h2>
 
         {created ? (
           <p className={styles.success} role="status">
@@ -165,7 +165,7 @@ export function WalletForm() {
             {created.pendingInvitations > 0
               ? ' Les invitations ne sont pas encore prises en charge : vous pourrez inviter ces membres plus tard.'
               : null}{' '}
-            <Link href={`/wallets/${created.id}`} className={styles.successLink}>
+            <Link href={`/wallets/${encodeURIComponent(created.id)}`} className={styles.successLink}>
               Ouvrir le porte-monnaie
             </Link>
             {' · '}
@@ -180,67 +180,67 @@ export function WalletForm() {
           </p>
         ) : null}
 
-        <div className={styles.fields}>
-          <Field label="Nom du porte-monnaie" hint="obligatoire" error={titleError}>
-            {(control) => (
-              <input
-                {...control}
-                ref={titleRef}
-                type="text"
-                name="title"
-                value={title}
-                onChange={handleTitleChange}
-                onBlur={() => setTitleTouched(true)}
-                placeholder="Ex. Week-end à Bordeaux"
-                maxLength={TITLE_MAX_LENGTH}
-                autoComplete="off"
-                aria-required="true"
-                readOnly={submitting}
-              />
-            )}
-          </Field>
+          <div className={styles.fields}>
+            <Field label="Nom du porte-monnaie" hint="obligatoire" error={titleError}>
+              {(control) => (
+                  <input
+                      {...control}
+                      ref={titleRef}
+                      type="text"
+                      name="title"
+                      value={title}
+                      onChange={handleTitleChange}
+                      onBlur={() => setTitleTouched(true)}
+                      placeholder="Ex. Week-end à Bordeaux"
+                      maxLength={TITLE_MAX_LENGTH}
+                      autoComplete="off"
+                      aria-required="true"
+                      readOnly={submitting}
+                  />
+              )}
+            </Field>
 
-          <Field label="Description" hint="optionnel">
-            {(control) => (
-              <textarea
-                {...control}
-                name="description"
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                placeholder="Ajoutez quelques détails pour les membres du groupe..."
-                readOnly={submitting}
-              />
-            )}
-          </Field>
+            <Field label="Description" hint="optionnel">
+              {(control) => (
+                  <textarea
+                      {...control}
+                      name="description"
+                      value={description}
+                      onChange={(event) => setDescription(event.target.value)}
+                      placeholder="Ajoutez quelques détails pour les membres du groupe..."
+                      readOnly={submitting}
+                  />
+              )}
+            </Field>
+          </div>
+
+          <hr className={styles.divider} />
+
+          <section aria-labelledby={invitesTitleId}>
+            <h3 id={invitesTitleId} className={styles.sectionTitle}>
+              Inviter des membres
+            </h3>
+            <p className={styles.sectionHint}>
+              Cette étape est optionnelle. Vous pourrez aussi inviter des membres plus
+              tard.
+            </p>
+            <MemberInvites
+                key={invitesKey}
+                emails={invitedEmails}
+                onChange={setInvitedEmails}
+                disabled={submitting}
+            />
+          </section>
         </div>
 
-        <hr className={styles.divider} />
-
-        <section aria-labelledby={invitesTitleId}>
-          <h3 id={invitesTitleId} className={styles.sectionTitle}>
-            Inviter des membres
-          </h3>
-          <p className={styles.sectionHint}>
-            Cette étape est optionnelle. Vous pourrez aussi inviter des membres plus
-            tard.
-          </p>
-          <MemberInvites
-            key={invitesKey}
-            emails={invitedEmails}
-            onChange={setInvitedEmails}
-            disabled={submitting}
-          />
-        </section>
-      </div>
-
-      <div className={styles.footer}>
-        <ButtonLink href="/" variant="ghost">
-          Annuler
-        </ButtonLink>
-        <Button type="submit" disabled={submitting}>
-          {submitting ? 'Création…' : 'Créer le porte-monnaie'}
-        </Button>
-      </div>
-    </form>
+        <div className={styles.footer}>
+          <ButtonLink href="/" variant="ghost">
+            Annuler
+          </ButtonLink>
+          <Button type="submit" disabled={submitting}>
+            {submitting ? 'Création…' : 'Créer le porte-monnaie'}
+          </Button>
+        </div>
+      </form>
   );
 }
