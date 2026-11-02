@@ -404,3 +404,193 @@ describe('ExpensesService.remove', () => {
     expect(transaction.wallet.update).not.toHaveBeenCalled();
   });
 });
+
+describe('ExpensesService.update', () => {
+  let expensesService: ExpensesService;
+  let prisma: { $transaction: Mock };
+  let transaction: {
+    $queryRaw: Mock;
+    expense: { findFirst: Mock; update: Mock };
+    wallet: { update: Mock };
+  };
+
+  const updatedRow = {
+    id: 'expense-1',
+    title: 'Train',
+    amount: 5000,
+    date: new Date('2026-10-26T00:00:00.000Z'),
+    createdAt: new Date('2026-10-27T10:00:00.000Z'),
+    paidBy: { id: 'user-1', name: 'Alice' },
+  };
+
+  function givenExpense(overrides: Record<string, unknown> = {}) {
+    transaction.expense.findFirst.mockResolvedValue({
+      paidById: 'user-1',
+      amount: 4599,
+      _count: { splits: 0 },
+      ...overrides,
+    });
+    transaction.expense.update.mockImplementation(async ({ data }) => ({
+      ...updatedRow,
+      ...data,
+    }));
+  }
+
+  beforeEach(() => {
+    transaction = {
+      $queryRaw: vi.fn().mockResolvedValue([{ status: 'OPEN' }]),
+      expense: {
+        findFirst: vi.fn(),
+        update: vi.fn(),
+      },
+      wallet: { update: vi.fn() },
+    };
+    prisma = {
+      $transaction: vi.fn(async (callback) => callback(transaction)),
+    };
+    expensesService = new ExpensesService(prisma as unknown as PrismaService);
+  });
+
+  it('updates only the supplied fields and leaves the purchase date unchanged', async () => {
+    givenExpense();
+
+    await expect(
+      expensesService.update('wallet-1', 'expense-1', 'user-1', {
+        title: 'Train corrigé',
+        amount: 5000,
+      }),
+    ).resolves.toEqual({
+      ...updatedRow,
+      title: 'Train corrigé',
+      amount: 5000,
+      date: '2026-10-26',
+    });
+
+    expect(transaction.expense.update).toHaveBeenCalledWith({
+      where: { id: 'expense-1' },
+      data: { title: 'Train corrigé', amount: 5000 },
+      select: expect.objectContaining({
+        paidBy: { select: { id: true, name: true } },
+      }),
+    });
+  });
+
+  it('updates the wallet timestamp in the same transaction', async () => {
+    givenExpense();
+
+    await expensesService.update('wallet-1', 'expense-1', 'user-1', {
+      title: 'Train',
+    });
+
+    expect(prisma.$transaction).toHaveBeenCalledOnce();
+    expect(transaction.wallet.update).toHaveBeenCalledWith({
+      where: { id: 'wallet-1' },
+      data: { updatedAt: expect.any(Date) },
+    });
+  });
+
+  it('locks the wallet before reading the expense', async () => {
+    givenExpense();
+
+    await expensesService.update('wallet-1', 'expense-1', 'user-1', {
+      title: 'Train',
+    });
+
+    expect(transaction.$queryRaw.mock.calls[0][0].join('')).toContain(
+      'FOR UPDATE',
+    );
+  });
+
+  it('scopes the expense lookup to the wallet in the URL', async () => {
+    givenExpense();
+
+    await expensesService.update('wallet-1', 'expense-1', 'user-1', {
+      title: 'Train',
+    });
+
+    expect(transaction.expense.findFirst).toHaveBeenCalledWith({
+      where: { id: 'expense-1', walletId: 'wallet-1' },
+      select: {
+        paidById: true,
+        amount: true,
+        _count: { select: { splits: true } },
+      },
+    });
+  });
+
+  it('rejects an empty patch', async () => {
+    await expect(
+      expensesService.update('wallet-1', 'expense-1', 'user-1', {}),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('throws NotFoundException when the wallet does not exist', async () => {
+    transaction.$queryRaw.mockResolvedValue([]);
+
+    await expect(
+      expensesService.update('wallet-1', 'expense-1', 'user-1', {
+        title: 'Train',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(transaction.expense.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('throws NotFoundException when the expense does not belong to the wallet', async () => {
+    transaction.expense.findFirst.mockResolvedValue(null);
+
+    await expect(
+      expensesService.update('wallet-1', 'expense-1', 'user-1', {
+        title: 'Train',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(transaction.expense.update).not.toHaveBeenCalled();
+  });
+
+  it('throws ConflictException when the wallet is closed', async () => {
+    transaction.$queryRaw.mockResolvedValue([{ status: 'CLOSED' }]);
+    givenExpense();
+
+    await expect(
+      expensesService.update('wallet-1', 'expense-1', 'user-1', {
+        title: 'Train',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(transaction.expense.update).not.toHaveBeenCalled();
+  });
+
+  it('throws ForbiddenException when the user is not the payer', async () => {
+    givenExpense({ paidById: 'user-2' });
+
+    await expect(
+      expensesService.update('wallet-1', 'expense-1', 'user-1', {
+        title: 'Train',
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(transaction.expense.update).not.toHaveBeenCalled();
+    expect(transaction.wallet.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects changing the amount when expense splits already exist', async () => {
+    givenExpense({ _count: { splits: 2 } });
+
+    await expect(
+      expensesService.update('wallet-1', 'expense-1', 'user-1', {
+        amount: 5000,
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(transaction.expense.update).not.toHaveBeenCalled();
+    expect(transaction.wallet.update).not.toHaveBeenCalled();
+  });
+
+  it('allows changing other fields when splits exist', async () => {
+    givenExpense({ _count: { splits: 2 } });
+
+    await expect(
+      expensesService.update('wallet-1', 'expense-1', 'user-1', {
+        title: 'Train',
+      }),
+    ).resolves.toMatchObject({ title: 'Train' });
+    expect(transaction.expense.update).toHaveBeenCalledOnce();
+  });
+});
