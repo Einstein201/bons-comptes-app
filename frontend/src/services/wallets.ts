@@ -1,4 +1,5 @@
 import { apiRequest } from './api';
+import { isDateString, isNonEmptyString, isRecord } from './api-contract';
 
 export type WalletStatus = 'OPEN' | 'CLOSED';
 
@@ -15,6 +16,17 @@ export type CreateWalletInput = {
   description?: string;
 };
 
+export type WalletDetails = {
+  wallet: Omit<Wallet, 'status'> & {
+    status: 'OPEN' | 'CLOSED';
+    isCreator: boolean;
+  };
+  members: {
+    items: WalletMember[];
+    nextCursor: string | null;
+  };
+};
+
 export type WalletMember = {
   userId: string;
   name: string;
@@ -24,17 +36,54 @@ export type WalletMember = {
   acceptedAt: string | null;
 };
 
-type WalletDetailsPage = {
-  wallet: Wallet;
-  members: { items: WalletMember[]; nextCursor: string | null };
-};
-
-export type WalletDetails = {
-  wallet: Wallet;
+// Le porte-monnaie avec tous ses membres (toutes les pages réunies).
+export type WalletWithMembers = {
+  wallet: WalletDetails['wallet'];
   members: WalletMember[];
 };
 
 const MEMBERS_PAGE_LIMIT = 100;
+
+function isWalletMember(value: unknown): value is WalletMember {
+  return isRecord(value) &&
+      isNonEmptyString(value.userId) &&
+      typeof value.name === 'string' &&
+      typeof value.email === 'string' &&
+      (value.status === 'INVITED' || value.status === 'MEMBER') &&
+      isDateString(value.invitedAt) &&
+      (value.acceptedAt === null || isDateString(value.acceptedAt));
+}
+
+function isWalletDetails(value: unknown, walletId: string): value is WalletDetails {
+  if (!isRecord(value) || !isRecord(value.wallet) || !isRecord(value.members)) {
+    return false;
+  }
+  const { wallet, members } = value;
+  return wallet.id === walletId &&
+      typeof wallet.title === 'string' &&
+      (wallet.description === null || typeof wallet.description === 'string') &&
+      (wallet.status === 'OPEN' || wallet.status === 'CLOSED') &&
+      typeof wallet.isCreator === 'boolean' &&
+      isDateString(wallet.createdAt) &&
+      Array.isArray(members.items) && members.items.every(isWalletMember) &&
+      (members.nextCursor === null || isNonEmptyString(members.nextCursor));
+}
+
+export async function getWallet(
+    walletId: string,
+    query: { limit?: number; cursor?: string } = {},
+): Promise<WalletDetails> {
+  const params = new URLSearchParams();
+  if (query.limit !== undefined) params.set('limit', String(query.limit));
+  if (query.cursor !== undefined) params.set('cursor', query.cursor);
+  const suffix = params.size ? `?${params}` : '';
+  const response = await apiRequest(`/wallets/${encodeURIComponent(walletId)}${suffix}`);
+  const body: unknown = await response.json();
+  if (!isWalletDetails(body, walletId)) {
+    throw new Error('La réponse du détail du porte-monnaie est invalide.');
+  }
+  return body;
+}
 
 // POST /wallets n'accepte que title et description : le créateur est l'utilisateur authentifié.
 export async function createWallet(input: CreateWalletInput): Promise<Wallet> {
@@ -47,24 +96,15 @@ export async function createWallet(input: CreateWalletInput): Promise<Wallet> {
   return (await response.json()) as Wallet;
 }
 
-// Les membres sont paginés : on suit les curseurs jusqu'à la dernière page.
-export async function getWalletDetails(walletId: string): Promise<WalletDetails> {
-  const path = `/wallets/${encodeURIComponent(walletId)}`;
-  const members: WalletMember[] = [];
-  let wallet: Wallet | undefined;
-  let cursor: string | null = null;
+// Les membres sont paginés : on appelle getWallet jusqu'à la dernière page.
+export async function getWalletDetails(walletId: string): Promise<WalletWithMembers> {
+  let page = await getWallet(walletId, { limit: MEMBERS_PAGE_LIMIT });
+  const members = [...page.members.items];
 
-  do {
-    const query = new URLSearchParams({ limit: String(MEMBERS_PAGE_LIMIT) });
-    if (cursor) query.set('cursor', cursor);
-
-    const response = await apiRequest(`${path}?${query}`);
-    const page = (await response.json()) as WalletDetailsPage;
-
-    wallet = page.wallet;
+  while (page.members.nextCursor) {
+    page = await getWallet(walletId, { limit: MEMBERS_PAGE_LIMIT, cursor: page.members.nextCursor });
     members.push(...page.members.items);
-    cursor = page.members.nextCursor;
-  } while (cursor);
+  }
 
-  return { wallet, members };
+  return { wallet: page.wallet, members };
 }

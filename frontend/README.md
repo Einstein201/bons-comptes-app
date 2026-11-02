@@ -75,6 +75,48 @@ permettront pas la restauration de session avec cette configuration.
 
 `GET /auth/me` renvoie actuellement `{ userId }`, sans nom ni email.
 
+## Services de clôture et de bilan
+
+Les services utilisent le client API authentifié existant :
+
+- `getWallet(id, { limit, cursor })` : `GET /wallets/:id`, détail et membres paginés. Le backend doit exposer `wallet.isCreator`.
+- `closeWallet(id)` : `POST /wallets/:id/close`, sans corps; retourne le portefeuille `CLOSED` avec ses dates.
+- `getWalletBalance(id)` : `GET /wallets/:id/balance`, retourne `walletId`, `totalAmount`, `balances` et `transfers`.
+- `getOptimizedPayments(id)` : `GET /wallets/:id/optimized-payments`, retourne `walletId` et `transfers`.
+
+Tous les montants restent des entiers en centimes dans les services. Un solde peut être négatif.
+Les virements du bilan correspondent au reste à régler après les remboursements `PAID`.
+Le plan optimisé distingue `initialAmount`, `remainingAmount` (après `PAID`) et
+`declarableAmount` (après `PAID` et `PENDING`). Un montant déclarable nul ne signifie
+donc pas nécessairement que le virement est réglé.
+
+Les réponses mal formées, les montants non entiers ou hors de la plage des entiers
+sûrs, et les réponses destinées à un autre portefeuille sont rejetés explicitement.
+Les erreurs HTTP et réseau sont propagées, sans bilan de secours.
+Le backend réserve la clôture au créateur et les consultations financières aux
+membres acceptés d'un portefeuille fermé.
+
+### Écran de clôture et de bilan
+
+La page protégée `/wallets/[id]` charge d'abord le détail. Seul le créateur d'un
+porte-monnaie ouvert voit l'action de clôture, suivie d'une confirmation.
+Après clôture, le détail et les deux routes financières sont rechargés.
+Le bilan et les virements sont affichés ensemble uniquement si leurs réponses
+sont cohérentes; une erreur masque le bilan et permet de réessayer.
+Les virements doivent correspondre au reste à régler de chaque membre; un plan
+vide n'est présenté comme réglé que si tous les soldes sont nuls.
+
+Les montants sont affichés en euros (`EUR`, locale `fr-FR`), à partir des centimes.
+Les soldes signés, le reste à régler et le montant encore déclarable ont des
+libellés distincts. Le bouton « Actualiser » recharge les données sans conserver
+un ancien bilan comme valide en cas d'échec.
+
+Pour une vérification manuelle, ouvrir `/wallets/ID_DU_PORTEFEUILLE` avec un
+portefeuille de test : vérifier la confirmation annulable du créateur, l'absence
+de l'action pour un autre membre, puis le rechargement du bilan après clôture.
+Vérifier également les montants distincts lorsqu'un remboursement est en attente,
+un portefeuille sans dépense et le masquage du bilan après un échec d'actualisation.
+
 ## Parcours d'authentification
 
 Les pages `/register` et `/login` utilisent les routes `POST /users`,

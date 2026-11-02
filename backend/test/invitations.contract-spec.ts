@@ -95,6 +95,22 @@ describe('IF-13 — contrat HTTP des invitations (UC04 et UC05)', () => {
       .set('Authorization', authorization(user));
   }
 
+  function declineInvitation(id: string, user = invitee) {
+    return request(server())
+      .post(`/invitations/${id}/decline`)
+      .set('Authorization', authorization(user));
+  }
+
+  function withdrawInvitation(
+    invitationId: string,
+    walletId = wallet.id,
+    user = creator,
+  ) {
+    return request(server())
+      .delete(`/wallets/${walletId}/invitations/${invitationId}`)
+      .set('Authorization', authorization(user));
+  }
+
   function expectNoSecrets(body: unknown) {
     if (Array.isArray(body)) {
       body.forEach(expectNoSecrets);
@@ -187,7 +203,7 @@ describe('IF-13 — contrat HTTP des invitations (UC04 et UC05)', () => {
       expect(response.body).toEqual({ userId: invitee.id });
     });
 
-    it.each(['create', 'list', 'accept'] as const)(
+    it.each(['create', 'list', 'accept', 'decline', 'withdraw'] as const)(
       'refuse la route %s sans authentification (401)',
       async (operation) => {
         const invitation = await testFixtures().createMembership(
@@ -198,13 +214,20 @@ describe('IF-13 — contrat HTTP des invitations (UC04 et UC05)', () => {
           create: `/wallets/${wallet.id}/invitations`,
           list: '/invitations',
           accept: `/invitations/${invitation.id}/accept`,
+          decline: `/invitations/${invitation.id}/decline`,
+          withdraw: `/wallets/${wallet.id}/invitations/${invitation.id}`,
         };
-        const response =
-          operation === 'list'
-            ? await request(server()).get(paths.list)
-            : await request(server())
+        const response = await (operation === 'list'
+          ? request(server()).get(paths.list)
+          : operation === 'withdraw'
+            ? request(server()).delete(paths.withdraw)
+            : request(server())
                 .post(paths[operation])
-                .send({ email: otherUser.email });
+                .send(
+                  operation === 'create'
+                    ? { email: otherUser.email }
+                    : undefined,
+                ));
 
         expect(response.status).toBe(401);
         expectNoSecrets(response.body);
@@ -238,6 +261,12 @@ describe('IF-13 — contrat HTTP des invitations (UC04 et UC05)', () => {
           request(server()).get('/invitations').set('Authorization', header),
           request(server())
             .post(`/invitations/${invitation.id}/accept`)
+            .set('Authorization', header),
+          request(server())
+            .post(`/invitations/${invitation.id}/decline`)
+            .set('Authorization', header),
+          request(server())
+            .delete(`/wallets/${wallet.id}/invitations/${invitation.id}`)
             .set('Authorization', header),
         ]);
 
@@ -753,6 +782,233 @@ describe('IF-13 — contrat HTTP des invitations (UC04 et UC05)', () => {
         status: 'MEMBER',
       });
       expect(await findMembership(otherUser.id)).toBeNull();
+    });
+  });
+
+  describe('POST /invitations/:id/decline', () => {
+    it('supprime l’invitation du destinataire et met à jour updatedAt (204)', async () => {
+      const invitation = await testFixtures().createMembership(
+        wallet.id,
+        invitee.id,
+      );
+      const oldUpdatedAt = new Date('2020-01-01T00:00:00.000Z');
+      await prisma.wallet.update({
+        where: { id: wallet.id },
+        data: { updatedAt: oldUpdatedAt },
+      });
+
+      await declineInvitation(invitation.id).expect(204);
+
+      expect(await findMembership()).toBeNull();
+      expect(
+        (
+          await prisma.wallet.findUniqueOrThrow({ where: { id: wallet.id } })
+        ).updatedAt.getTime(),
+      ).toBeGreaterThan(oldUpdatedAt.getTime());
+      expect(await findMembership(creator.id)).toMatchObject({
+        status: 'MEMBER',
+      });
+    });
+
+    it.each(['creator', 'otherUser'] as const)(
+      'refuse le refus par %s sans modifier l’invitation (403)',
+      async (actor) => {
+        const invitation = await testFixtures().createMembership(
+          wallet.id,
+          invitee.id,
+        );
+
+        await declineInvitation(
+          invitation.id,
+          actor === 'creator' ? creator : otherUser,
+        ).expect(403);
+
+        expect(await findMembership()).toEqual(invitation);
+      },
+    );
+
+    it('refuse une invitation déjà acceptée sans supprimer le membre (409)', async () => {
+      const membership = await testFixtures().createMembership(
+        wallet.id,
+        invitee.id,
+        { status: 'MEMBER', acceptedAt: new Date() },
+      );
+
+      await declineInvitation(membership.id).expect(409);
+
+      expect(await findMembership()).toEqual(membership);
+    });
+
+    it('refuse une invitation existante sur un portefeuille fermé (409)', async () => {
+      const invitation = await testFixtures().createMembership(
+        wallet.id,
+        invitee.id,
+      );
+      await prisma.wallet.update({
+        where: { id: wallet.id },
+        data: { status: 'CLOSED', closedAt: new Date() },
+      });
+
+      await declineInvitation(invitation.id).expect(409);
+
+      expect(await findMembership()).toEqual(invitation);
+    });
+
+    it('refuse une invitation supprimée par la clôture (404)', async () => {
+      const invitation = await testFixtures().createMembership(
+        wallet.id,
+        invitee.id,
+      );
+      await request(server())
+        .post(`/wallets/${wallet.id}/close`)
+        .set('Authorization', authorization(creator))
+        .expect(200);
+
+      await declineInvitation(invitation.id).expect(404);
+      expect(await findMembership()).toBeNull();
+      expect(await findMembership(creator.id)).toMatchObject({
+        status: 'MEMBER',
+      });
+    });
+
+    it('ne réussit pas simultanément avec l’acceptation', async () => {
+      const invitation = await testFixtures().createMembership(
+        wallet.id,
+        invitee.id,
+      );
+      const responses = await Promise.all([
+        acceptInvitation(invitation.id),
+        declineInvitation(invitation.id),
+      ]);
+
+      expect(responses.map((response) => response.status).sort()).toEqual([
+        200, 409,
+      ]);
+      expect(await findMembership()).toMatchObject({
+        id: invitation.id,
+        status: 'MEMBER',
+      });
+    });
+  });
+
+  describe('DELETE /wallets/:walletId/invitations/:id', () => {
+    it('supprime l’invitation du créateur et met à jour updatedAt (204)', async () => {
+      const invitation = await testFixtures().createMembership(
+        wallet.id,
+        invitee.id,
+      );
+      const oldUpdatedAt = new Date('2020-01-01T00:00:00.000Z');
+      await prisma.wallet.update({
+        where: { id: wallet.id },
+        data: { updatedAt: oldUpdatedAt },
+      });
+
+      await withdrawInvitation(invitation.id).expect(204);
+
+      expect(await findMembership()).toBeNull();
+      expect(
+        (
+          await prisma.wallet.findUniqueOrThrow({ where: { id: wallet.id } })
+        ).updatedAt.getTime(),
+      ).toBeGreaterThan(oldUpdatedAt.getTime());
+    });
+
+    it('refuse le retrait par un utilisateur autre que le créateur (403)', async () => {
+      const invitation = await testFixtures().createMembership(
+        wallet.id,
+        invitee.id,
+      );
+
+      await withdrawInvitation(invitation.id, wallet.id, invitee).expect(403);
+
+      expect(await findMembership()).toEqual(invitation);
+    });
+
+    it('retourne 404 si l’invitation appartient à un autre portefeuille', async () => {
+      const invitation = await testFixtures().createMembership(
+        wallet.id,
+        invitee.id,
+      );
+      const otherWallet = await testFixtures().createWallet(creator.id);
+
+      await withdrawInvitation(invitation.id, otherWallet.id).expect(404);
+
+      expect(await findMembership()).toEqual(invitation);
+    });
+
+    it('refuse le retrait d’une adhésion MEMBER sans la supprimer (409)', async () => {
+      const membership = await testFixtures().createMembership(
+        wallet.id,
+        invitee.id,
+        { status: 'MEMBER', acceptedAt: new Date() },
+      );
+
+      await withdrawInvitation(membership.id).expect(409);
+
+      expect(await findMembership()).toEqual(membership);
+    });
+
+    it('refuse une invitation existante sur un portefeuille fermé (409)', async () => {
+      const invitation = await testFixtures().createMembership(
+        wallet.id,
+        invitee.id,
+      );
+      await prisma.wallet.update({
+        where: { id: wallet.id },
+        data: { status: 'CLOSED', closedAt: new Date() },
+      });
+
+      await withdrawInvitation(invitation.id).expect(409);
+
+      expect(await findMembership()).toEqual(invitation);
+    });
+
+    it('ne réussit pas simultanément avec l’acceptation', async () => {
+      const invitation = await testFixtures().createMembership(
+        wallet.id,
+        invitee.id,
+      );
+      const responses = await Promise.all([
+        acceptInvitation(invitation.id),
+        withdrawInvitation(invitation.id),
+      ]);
+
+      const statuses = responses.map((response) => response.status).sort();
+      expect(statuses).toEqual(expect.arrayContaining([409]));
+      expect(statuses).toHaveLength(2);
+      const membership = await findMembership();
+      if (statuses.includes(200)) {
+        expect(membership).toMatchObject({
+          id: invitation.id,
+          status: 'MEMBER',
+        });
+      } else {
+        expect(statuses).toEqual([204, 409]);
+        expect(membership).toBeNull();
+      }
+    });
+
+    it('ne réussit pas simultanément avec la clôture', async () => {
+      const invitation = await testFixtures().createMembership(
+        wallet.id,
+        invitee.id,
+      );
+      const [withdrawResponse, closeResponse] = await Promise.all([
+        withdrawInvitation(invitation.id),
+        request(server())
+          .post(`/wallets/${wallet.id}/close`)
+          .set('Authorization', authorization(creator)),
+      ]);
+
+      expect(
+        (withdrawResponse.status === 204 && closeResponse.status === 200) ||
+          (withdrawResponse.status === 409 && closeResponse.status === 200),
+      ).toBe(true);
+      const currentWallet = await prisma.wallet.findUniqueOrThrow({
+        where: { id: wallet.id },
+      });
+      expect(currentWallet.status).toBe('CLOSED');
+      expect(await findMembership()).toBeNull();
     });
   });
 });
