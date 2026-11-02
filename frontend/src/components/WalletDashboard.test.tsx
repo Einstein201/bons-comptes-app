@@ -83,6 +83,21 @@ describe('tableau de bord', () => {
     expect(screen.queryByText('Porte-monnaie c')).toBeNull();
   });
 
+  it('charge les trois sections avec une seule requête initiale', async () => {
+    mocks.listWallets.mockResolvedValue(
+      lists({
+        open: page([wallet('a')]),
+        closed: page([wallet('b')]),
+        invitations: page([wallet('c')]),
+      }),
+    );
+    render(<WalletDashboard />);
+
+    expect(await screen.findByText('Porte-monnaie a')).toBeTruthy();
+    expect(mocks.listWallets).toHaveBeenCalledTimes(1);
+    expect(mocks.listWallets).toHaveBeenCalledWith({ limit: 10 });
+  });
+
   it('affiche un état vide explicite pour chaque section', async () => {
     mocks.listWallets.mockResolvedValue(lists());
     render(<WalletDashboard />);
