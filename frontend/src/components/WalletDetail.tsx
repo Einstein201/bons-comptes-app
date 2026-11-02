@@ -13,6 +13,7 @@ import { ExpenseList } from './ExpenseList';
 import { describeExpenseError, isClosedWalletError } from './expenseErrors';
 import { LockIcon, PlusIcon } from './icons';
 import { InviteMemberForm } from './InviteMemberForm';
+import { useWalletTab } from './WalletTabs';
 import styles from './WalletDetail.module.css';
 
 type Notice = { kind: 'success' | 'error'; message: string };
@@ -50,6 +51,9 @@ export function WalletDetail({ walletId }: { walletId: string }) {
 function WalletDetailContent({ walletId }: { walletId: string }) {
     const { user } = useAuth();
     const currentUserId = user?.userId;
+    const tab = useWalletTab();
+    const showExpenses = tab === 'all' || tab === 'expenses';
+    const showMembers = tab === 'all' || tab === 'members';
 
     const [wallet, setWallet] = useState<WalletWithMembers['wallet']>();
     const [members, setMembers] = useState<WalletMember[]>([]);
@@ -165,6 +169,8 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
         }
     }
 
+    if (!showExpenses && !showMembers) return null;
+
     if (loadError) {
         return (
             <div className={styles.state} role="alert">
@@ -186,6 +192,7 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
     return (
         <div className={styles.content}>
             {/* Titre, statut et description sont affichés par WalletBalance (IF-38). */}
+            {showExpenses ? (
             <section className={styles.summary}>
                 <div className={styles.actions}>
                     <ul className={styles.avatars} aria-label="Membres">
@@ -207,7 +214,9 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
                     <strong>{formatCents(totalAmount)}</strong>
                 </div>
             </section>
+            ) : null}
 
+            {showMembers ? (
             <section className={styles.summary} aria-labelledby="members-title">
                 <h2 id="members-title" className={styles.sectionTitle}>Membres du porte-monnaie</h2>
                 <ul className={styles.memberList} aria-label="Détail des membres">
@@ -224,7 +233,10 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
                     <InviteMemberForm walletId={walletId} onInvited={refreshMembers} />
                 ) : null}
             </section>
+            ) : null}
 
+            {showExpenses ? (
+            <>
             {!isOpen ? (
                 <p className={styles.closed} role="status">
                     <LockIcon className={styles.closedIcon} />
@@ -262,6 +274,8 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
                     onClose={() => setFormOpen(false)}
                     onWalletClosed={markWalletClosed}
                 />
+            ) : null}
+            </>
             ) : null}
         </div>
     );
