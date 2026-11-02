@@ -67,7 +67,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  me(@Req() req: Request) {
-    return req.user; // ce que renvoie JwtStrategy.validate()
+  me(@Req() req: Request & { user: { userId: string } }) {
+    return this.authService.me(req.user.userId);
   }
 }
