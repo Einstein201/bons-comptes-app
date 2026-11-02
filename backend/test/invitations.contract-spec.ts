@@ -200,7 +200,7 @@ describe('IF-13 — contrat HTTP des invitations (UC04 et UC05)', () => {
         .set('Authorization', authorization(invitee))
         .expect(200);
 
-      expect(response.body).toEqual({ userId: invitee.id });
+      expect(response.body).toEqual({ userId: invitee.id, name: invitee.name });
     });
 
     it.each(['create', 'list', 'accept', 'decline', 'withdraw'] as const)(

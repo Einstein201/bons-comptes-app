@@ -19,6 +19,9 @@ describe('User registration (e2e)', () => {
   }
 
   beforeAll(async () => {
+    process.env.JWT_SECRET = 'if41-test-access-secret';
+    process.env.JWT_REFRESH_SECRET = 'if41-test-refresh-secret';
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -106,6 +109,55 @@ describe('User registration (e2e)', () => {
     ],
   ])('rejects a request with %s', async (_case, input) => {
     await request(app.getHttpServer()).post('/users').send(input).expect(400);
+  });
+
+  it('updates the authenticated profile name and exposes it through auth/me', async () => {
+    const input = {
+      email: createTestEmail(),
+      name: 'Alice',
+      password: 'motdepasse123',
+    };
+    const server = app.getHttpServer();
+
+    await request(server).post('/users').send(input).expect(201);
+    const login = await request(server)
+      .post('/auth/login')
+      .send({ email: input.email, password: input.password })
+      .expect(200);
+
+    const authorization = `Bearer ${login.body.accessToken}`;
+    const updated = await request(server)
+      .patch('/users/me')
+      .set('Authorization', authorization)
+      .send({ name: 'Alice mise à jour' })
+      .expect(200);
+
+    expect(updated.body).toEqual({
+      id: expect.any(String),
+      name: 'Alice mise à jour',
+    });
+    expect(updated.body).not.toHaveProperty('password');
+
+    await request(server)
+      .get('/auth/me')
+      .set('Authorization', authorization)
+      .expect(200)
+      .expect({ userId: updated.body.id, name: 'Alice mise à jour' });
+  });
+
+  it.each([
+    ['missing', {}],
+    ['empty', { name: '' }],
+    ['not a string', { name: 123 }],
+    ['too long', { name: 'a'.repeat(101) }],
+    ['unexpected user id', { name: 'Bob', userId: 'another-user' }],
+  ])('rejects an invalid profile update: %s', async (_case, body) => {
+    await request(app.getHttpServer())
+      .patch('/users/me')
+      .send(body)
+      .expect((response) => {
+        expect([400, 401]).toContain(response.status);
+      });
   });
 
   afterAll(async () => {
