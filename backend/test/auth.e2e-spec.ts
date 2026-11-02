@@ -1,5 +1,10 @@
 import { ConfigModule } from '@nestjs/config';
-import { Global, INestApplication, Module, ValidationPipe } from '@nestjs/common';
+import {
+  Global,
+  INestApplication,
+  Module,
+  ValidationPipe,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import bcrypt from 'bcryptjs';
 import cookieParser from 'cookie-parser';
@@ -10,37 +15,68 @@ import { AuthModule } from '../src/auth/auth.module.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 
 const findUnique = vi.fn();
+const update = vi.fn();
 
 @Global()
 @Module({
-  providers: [{ provide: PrismaService, useValue: { user: { findUnique } } }],
+  providers: [
+    { provide: PrismaService, useValue: { user: { findUnique, update } } },
+  ],
   exports: [PrismaService],
 })
 class PrismaStubModule {}
 
 describe('Auth flow (e2e)', () => {
   let app: INestApplication;
+  let passwordHash: string;
+  let sessionVersion: number;
 
   beforeAll(async () => {
     process.env.JWT_SECRET = 'test-secret';
     process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
 
     const moduleRef = await Test.createTestingModule({
-      imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaStubModule, AuthModule],
+      imports: [
+        ConfigModule.forRoot({ isGlobal: true }),
+        PrismaStubModule,
+        AuthModule,
+      ],
     }).compile();
 
     app = moduleRef.createNestApplication();
     app.use(cookieParser());
     app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
     );
     await app.init();
 
-    const password = await bcrypt.hash('motdepasse123', 10);
-    findUnique.mockImplementation(({ where }: { where: { id?: string; email?: string } }) =>
-      where.id === 'user-1' || where.email === 'alice@example.com'
-        ? Promise.resolve({ id: 'user-1', email: 'alice@example.com', password })
-        : Promise.resolve(null),
+    passwordHash = await bcrypt.hash('motdepasse123', 10);
+    sessionVersion = 0;
+    findUnique.mockImplementation(
+      ({ where }: { where: { id?: string; email?: string } }) =>
+        where.id === 'user-1' || where.email === 'alice@example.com'
+          ? Promise.resolve({
+              id: 'user-1',
+              email: 'alice@example.com',
+              password: passwordHash,
+              sessionVersion,
+            })
+          : Promise.resolve(null),
+    );
+    update.mockImplementation(
+      ({
+        data,
+      }: {
+        data: { password: string; sessionVersion: { increment: number } };
+      }) => {
+        passwordHash = data.password;
+        sessionVersion += data.sessionVersion.increment;
+        return Promise.resolve({ id: 'user-1', sessionVersion });
+      },
     );
   });
 
@@ -66,7 +102,9 @@ describe('Auth flow (e2e)', () => {
     expect(refreshed.body.accessToken).toEqual(expect.any(String));
 
     const logout = await request(server).post('/auth/logout').expect(200);
-    expect((logout.headers['set-cookie'] as unknown as string[])[0]).toMatch(/refreshToken=;/);
+    expect((logout.headers['set-cookie'] as unknown as string[])[0]).toMatch(
+      /refreshToken=;/,
+    );
   });
 
   it('refresh sans cookie répond 401', async () => {
@@ -78,5 +116,53 @@ describe('Auth flow (e2e)', () => {
       .post('/auth/login')
       .send({ email: 'alice@example.com', password: 'mauvais' })
       .expect(401);
+  });
+
+  it('change le mot de passe, refuse l’ancien et révoque le refresh token précédent', async () => {
+    const server = app.getHttpServer();
+    const login = await request(server)
+      .post('/auth/login')
+      .send({ email: 'alice@example.com', password: 'motdepasse123' })
+      .expect(200);
+    const oldRefreshCookie = (
+      login.headers['set-cookie'] as unknown as string[]
+    )[0].split(';')[0];
+
+    const changed = await request(server)
+      .post('/auth/change-password')
+      .set('Authorization', `Bearer ${login.body.accessToken}`)
+      .send({
+        currentPassword: 'motdepasse123',
+        newPassword: 'nouveau-motdepasse',
+      })
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toEqual({
+          message: 'Mot de passe modifié avec succès.',
+          accessToken: expect.any(String),
+        });
+      });
+
+    const newRefreshCookie = (
+      changed.headers['set-cookie'] as unknown as string[]
+    )[0].split(';')[0];
+
+    await request(server)
+      .post('/auth/refresh')
+      .set('Cookie', newRefreshCookie)
+      .expect(200);
+
+    await request(server)
+      .post('/auth/refresh')
+      .set('Cookie', oldRefreshCookie)
+      .expect(401);
+    await request(server)
+      .post('/auth/login')
+      .send({ email: 'alice@example.com', password: 'motdepasse123' })
+      .expect(401);
+    await request(server)
+      .post('/auth/login')
+      .send({ email: 'alice@example.com', password: 'nouveau-motdepasse' })
+      .expect(200);
   });
 });
