@@ -159,22 +159,26 @@ export function WalletForm() {
             Créer un nouveau <span className={styles.nowrap}>porte-monnaie</span>
           </h2>
 
-          {created ? (
-              <p className={styles.success} role="status">
-                Le porte-monnaie «&nbsp;{created.title}&nbsp;» a été créé.
-                {created.pendingInvitations > 0
-                    ? ' Les invitations ne sont pas encore prises en charge : vous pourrez inviter ces membres plus tard.'
-                    : null}{' '}
-                <Link href={`/wallets/${encodeURIComponent(created.id)}`}>
-                  Ouvrir le porte-monnaie
-                </Link>
-              </p>
-          ) : null}
-          {failure ? (
-              <p className={styles.alert} role="alert">
-                {failure}
-              </p>
-          ) : null}
+        {created ? (
+          <p className={styles.success} role="status">
+            Le porte-monnaie «&nbsp;{created.title}&nbsp;» a été créé.
+            {created.pendingInvitations > 0
+              ? ' Les invitations ne sont pas encore prises en charge : vous pourrez inviter ces membres plus tard.'
+              : null}{' '}
+            <Link href={`/wallets/${encodeURIComponent(created.id)}`} className={styles.successLink}>
+              Ouvrir le porte-monnaie
+            </Link>
+            {' · '}
+            <Link href="/" className={styles.successLink}>
+              Mes porte-monnaie
+            </Link>
+          </p>
+        ) : null}
+        {failure ? (
+          <p className={styles.alert} role="alert">
+            {failure}
+          </p>
+        ) : null}
 
           <div className={styles.fields}>
             <Field label="Nom du porte-monnaie" hint="obligatoire" error={titleError}>
