@@ -14,7 +14,7 @@ describe('UsersController', () => {
   });
 
   it('updates the profile of the authenticated user', async () => {
-    const profile = { id: 'user-123', name: 'Alice mise à jour' };
+    const profile = { userId: 'user-123', name: 'Alice mise à jour' };
     usersService.updateProfile.mockResolvedValue(profile);
 
     await expect(

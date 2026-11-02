@@ -1,4 +1,8 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { hash } from 'bcryptjs';
 import { BCRYPT_ROUNDS } from '../auth/auth.constants.js';
@@ -54,14 +58,27 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, input: UpdateProfileInput) {
-    return this.prisma.user.update({
-      where: { id: userId },
-      data: { name: input.name },
-      select: {
-        id: true,
-        name: true,
-      },
-    });
+    try {
+      const profile = await this.prisma.user.update({
+        where: { id: userId },
+        data: { name: input.name },
+        select: {
+          id: true,
+          name: true,
+        },
+      });
+
+      return { userId: profile.id, name: profile.name };
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new UnauthorizedException('Utilisateur introuvable');
+      }
+
+      throw error;
+    }
   }
 
   private isEmailConflict(error: unknown): boolean {

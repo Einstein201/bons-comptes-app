@@ -133,7 +133,7 @@ describe('User registration (e2e)', () => {
       .expect(200);
 
     expect(updated.body).toEqual({
-      id: expect.any(String),
+      userId: expect.any(String),
       name: 'Alice mise à jour',
     });
     expect(updated.body).not.toHaveProperty('password');
@@ -142,7 +142,7 @@ describe('User registration (e2e)', () => {
       .get('/auth/me')
       .set('Authorization', authorization)
       .expect(200)
-      .expect({ userId: updated.body.id, name: 'Alice mise à jour' });
+      .expect({ userId: updated.body.userId, name: 'Alice mise à jour' });
   });
 
   it.each([
