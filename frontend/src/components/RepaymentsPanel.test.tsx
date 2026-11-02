@@ -132,6 +132,22 @@ it('montre uniquement les actions autorisées par les indicateurs API', async ()
   expect(screen.getAllByRole('button', { name: 'Annuler le remboursement' })).toHaveLength(1);
 });
 
+it.each([
+  ['émetteur', { canConfirm: false, canCancel: true }, 0, 1],
+  ['destinataire', { canConfirm: true, canCancel: false }, 1, 0],
+  ['créateur du portefeuille', { canConfirm: true, canCancel: false }, 1, 0],
+  ['membre tiers', { canConfirm: false, canCancel: false }, 0, 0],
+])('affiche les actions attendues pour le rôle %s', async (_role, flags, confirms, cancels) => {
+  renderPanel({
+    userId: 'carol',
+    page: { items: [{ ...first, ...flags }], nextCursor: null },
+  });
+
+  await screen.findByText('Bob → Alice');
+  expect(screen.queryAllByRole('button', { name: 'Confirmer le remboursement' })).toHaveLength(confirms);
+  expect(screen.queryAllByRole('button', { name: 'Annuler le remboursement' })).toHaveLength(cancels);
+});
+
 it('déclare un montant en euros converti en centimes et actualise liste et bilan', async () => {
   vi.mocked(declareRepayment).mockResolvedValue({
     id: 'new',
