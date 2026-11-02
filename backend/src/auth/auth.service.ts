@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import type { Response } from 'express';
 
 import { PrismaService } from '../prisma/prisma.service.js';
+import type { ChangePasswordDto } from './dto/change-password.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import {
   BCRYPT_ROUNDS,
@@ -34,7 +35,32 @@ export class AuthService {
     if (!user || !isMatch) {
       throw new UnauthorizedException(INVALID_CREDENTIALS);
     }
-    return this.issueTokens(user.id);
+    return this.issueTokens(user.id, user.sessionVersion);
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { password: true },
+    });
+
+    if (
+      !user ||
+      !(await this.verifyPassword(dto.currentPassword, user.password))
+    ) {
+      throw new UnauthorizedException(INVALID_CREDENTIALS);
+    }
+
+    const password = await bcrypt.hash(dto.newPassword, BCRYPT_ROUNDS);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        password,
+        sessionVersion: { increment: 1 },
+      },
+    });
+
+    return { message: 'Mot de passe modifié avec succès.' };
   }
 
   private verifyPassword(plain: string, hash: string): Promise<boolean> {
@@ -44,7 +70,11 @@ export class AuthService {
   async refresh(refreshToken: string | undefined) {
     if (!refreshToken) throw new UnauthorizedException('Refresh token manquant');
 
-    let payload: { sub?: unknown; tokenType?: unknown };
+    let payload: {
+      sub?: unknown;
+      tokenType?: unknown;
+      sessionVersion?: unknown;
+    };
     try {
       payload = this.jwtService.verify(refreshToken, {
         secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
@@ -55,16 +85,22 @@ export class AuthService {
     if (
       payload.tokenType !== 'refresh' ||
       typeof payload.sub !== 'string' ||
-      payload.sub.trim() === ''
+      payload.sub.trim() === '' ||
+      typeof payload.sessionVersion !== 'number' ||
+      !Number.isInteger(payload.sessionVersion) ||
+      payload.sessionVersion < 0
     ) {
       throw new UnauthorizedException('Refresh token invalide ou expiré');
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
     if (!user) throw new UnauthorizedException('Refresh token invalide ou expiré');
+    if (user.sessionVersion !== payload.sessionVersion) {
+      throw new UnauthorizedException('Refresh token invalide ou expiré');
+    }
 
     // Nouveau refresh token émis; l'ancien reste valide jusqu'à son expiration (pas de révocation côté serveur)
-    return this.issueTokens(user.id);
+    return this.issueTokens(user.id, user.sessionVersion);
   }
 
   setRefreshCookie(res: Response, token: string) {
@@ -80,13 +116,13 @@ export class AuthService {
     return { message: 'Logout successful' };
   }
 
-  private issueTokens(userId: string) {
+  private issueTokens(userId: string, sessionVersion: number) {
     const accessToken = this.jwtService.sign(
       { sub: userId, tokenType: 'access' },
       { expiresIn: '1h' },
     );
     const refreshToken = this.jwtService.sign(
-      { sub: userId, tokenType: 'refresh' },
+      { sub: userId, tokenType: 'refresh', sessionVersion },
       { secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'), expiresIn: '7d' },
     );
     return { accessToken, refreshToken };

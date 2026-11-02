@@ -29,6 +29,7 @@ model User {
   email              String         @unique
   name               String
   password           String
+  sessionVersion     Int            @default(0)
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
   walletMemberships  WalletMember[]
