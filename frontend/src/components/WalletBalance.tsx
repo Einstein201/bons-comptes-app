@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import { ApiError } from '../services/api';
 import {
   closeWallet, getOptimizedPayments, getWalletBalance,
@@ -9,6 +10,7 @@ import {
 import { formatCents } from '../services/money';
 import { getWallet, type WalletDetails } from '../services/wallets';
 import { Button } from './Button';
+import { RepaymentsPanel } from './RepaymentsPanel';
 import styles from './WalletBalance.module.css';
 
 type State =
@@ -63,6 +65,7 @@ function checkFinancialData(balance: Balance, plan: OptimizedPayments): void {
 // children : contenu affiché sous l'en-tête (les dépenses, IF-37). Il n'est affiché qu'une fois
 // le porte-monnaie chargé, donc il se recharge aussi après « Actualiser » ou une clôture.
 export function WalletBalance({ walletId, children }: { walletId: string; children?: ReactNode }) {
+  const { user } = useAuth();
   const [state, setState] = useState<State>({ status: 'loading' });
   const [revision, setRevision] = useState(0);
   const [confirming, setConfirming] = useState(false);
@@ -104,6 +107,17 @@ export function WalletBalance({ walletId, children }: { walletId: string; childr
     setConfirming(false);
     setActionError(undefined);
     setRevision((value) => value + 1);
+  }
+
+  async function refreshFinancial() {
+    const [balance, plan] = await Promise.all([
+      getWalletBalance(walletId),
+      getOptimizedPayments(walletId),
+    ]);
+    checkFinancialData(balance, plan);
+    setState((current) => current.status === 'ready'
+        ? { ...current, financial: { balance, plan } }
+        : current);
   }
 
   async function confirmClose() {
@@ -209,6 +223,17 @@ export function WalletBalance({ walletId, children }: { walletId: string; childr
                     ))}</ul>
                 )}
               </section>
+              {user && (
+                  <RepaymentsPanel
+                      walletId={walletId}
+                      userId={user.userId}
+                      transfers={financial.plan.transfers}
+                      memberNames={Object.fromEntries(
+                          financial.balance.balances.map((member) => [member.userId, member.name]),
+                      )}
+                      onFinancialRefresh={refreshFinancial}
+                  />
+              )}
             </>
         )}
       </section>
