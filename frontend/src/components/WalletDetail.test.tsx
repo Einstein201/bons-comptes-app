@@ -56,7 +56,7 @@ const titles = () =>
 
 describe('détail d’un porte-monnaie', () => {
     beforeEach(() => {
-        vi.clearAllMocks();
+        vi.resetAllMocks();
         givenWallet();
     });
     afterEach(cleanup);
@@ -232,6 +232,31 @@ describe('détail d’un porte-monnaie', () => {
         render(<WalletDetail walletId="wallet-1" />);
 
         expect((await screen.findByRole('alert')).textContent).toContain(message);
+    });
+
+    it('garde le bouton de pagination quand toutes les dépenses affichées sont supprimées', async () => {
+        mocks.listExpenses
+            .mockResolvedValueOnce({
+                items: [expense('e-2', '2025-06-21', 100, 'me', 'Courses')],
+                nextCursor: 'cursor-1',
+                totalAmount: 300,
+            })
+            .mockResolvedValueOnce({
+                items: [expense('e-1', '2025-06-12', 200, 'chloe', 'Électricité')],
+                nextCursor: null,
+                totalAmount: 200,
+            });
+        mocks.deleteExpense.mockResolvedValue(undefined);
+
+        render(<WalletDetail walletId="wallet-1" />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Supprimer la dépense « Courses »' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }));
+        await waitFor(() => expect(screen.queryByText('Courses')).toBeNull());
+
+        fireEvent.click(screen.getByRole('button', { name: 'Afficher plus de dépenses' }));
+
+        expect(await screen.findByText('Électricité')).toBeTruthy();
+        expect(mocks.listExpenses).toHaveBeenLastCalledWith('wallet-1', { cursor: 'cursor-1' });
     });
 
     it('n’affiche plus l’ancien porte-monnaie quand l’identifiant change', async () => {
