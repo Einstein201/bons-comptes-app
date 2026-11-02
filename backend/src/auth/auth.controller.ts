@@ -1,4 +1,13 @@
-import { Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import type { Request, Response } from 'express';
 
 import { AuthService } from './auth.service.js';
@@ -12,7 +21,10 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(200)
-  async login(@Body() body: LoginDto, @Res({ passthrough: true }) res: Response) {
+  async login(
+    @Body() body: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const { accessToken, refreshToken } = await this.authService.login(body);
     this.authService.setRefreshCookie(res, refreshToken);
     return { accessToken };
@@ -20,7 +32,10 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(200)
-  async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+  async refresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const { accessToken, refreshToken } = await this.authService.refresh(
       req.cookies?.[REFRESH_COOKIE],
     );
@@ -36,7 +51,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  me(@Req() req: Request) {
-    return req.user; // ce que renvoie JwtStrategy.validate()
+  me(@Req() req: Request & { user: { userId: string } }) {
+    return this.authService.me(req.user.userId);
   }
 }
