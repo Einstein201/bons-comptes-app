@@ -192,8 +192,10 @@ export class WalletsService {
       memberships,
       limit,
       total,
-      ({ invitedAt, wallet }) => ({
+      ({ id, invitedAt, wallet }) => ({
         ...toWalletItem(wallet, userId),
+        // L'identifiant de l'adhésion sert à répondre à l'invitation (POST /invitations/:id/accept ou decline) ; `id` reste celui du porte-monnaie.
+        invitationId: id,
         invitedAt,
       }),
       (membership) => encodeCursor(membership.invitedAt, membership.id),
@@ -203,7 +205,7 @@ export class WalletsService {
   async findOne(walletId: string, userId: string, query: GetWalletQueryDto) {
     const wallet = await this.prisma.wallet.findUnique({
       where: { id: walletId },
-      select: walletSelect,
+      select: { ...walletSelect, createdById: true },
     });
 
     if (!wallet) {
@@ -232,9 +234,10 @@ export class WalletsService {
     const hasNextPage = memberships.length > query.limit;
     const page = memberships.slice(0, query.limit);
     const nextCursor = hasNextPage ? page[page.length - 1].id : null;
+    const { createdById, ...walletFields } = wallet;
 
     return {
-      wallet,
+      wallet: { ...walletFields, isCreator: createdById === userId },
       members: {
         items: page.map((membership) => ({
           userId: membership.user.id,

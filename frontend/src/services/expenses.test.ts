@@ -79,9 +79,13 @@ describe('service des dépenses', () => {
 });
 
 describe('détail du porte-monnaie', () => {
-    const wallet = { id: 'wallet-1', title: 'Voyage', description: null, status: 'OPEN' };
+    const wallet = {
+        id: 'wallet-1', title: 'Voyage', description: null, status: 'OPEN',
+        isCreator: true, createdAt: '2025-05-01T00:00:00.000Z',
+    };
     const member = (userId: string, status = 'MEMBER') => ({
         userId, name: userId, email: `${userId}@exemple.fr`, status,
+        invitedAt: '2025-05-01T00:00:00.000Z', acceptedAt: null,
     });
 
     it('récupère tous les membres en suivant les pages', async () => {
