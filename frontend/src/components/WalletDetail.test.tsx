@@ -11,11 +11,13 @@ const mocks = vi.hoisted(() => ({
     listExpenses: vi.fn(),
     deleteExpense: vi.fn(),
     createExpense: vi.fn(),
+    sendInvitation: vi.fn(),
 }));
 
 vi.mock('../contexts/AuthContext', () => ({
     useAuth: () => ({ user: { userId: 'me' } }),
 }));
+vi.mock('../services/invitations', () => ({ sendInvitation: mocks.sendInvitation }));
 vi.mock('../services/wallets', () => ({ getWalletDetails: mocks.getWalletDetails }));
 vi.mock('../services/expenses', () => ({
     listExpenses: mocks.listExpenses,
@@ -319,6 +321,59 @@ describe('détail d’un porte-monnaie', () => {
 
         expect((await screen.findByRole('alert')).textContent).toContain('La demande est invalide');
         expect(titles()).toEqual(['Dépense e-1']);
+    });
+
+    describe('membres et invitations', () => {
+        const withCreator = (isCreator: boolean, status: 'OPEN' | 'CLOSED' = 'OPEN') => {
+            mocks.getWalletDetails.mockResolvedValue({
+                wallet: { id: 'wallet-1', title: 'Voyage', description: null, status, createdAt: '', isCreator },
+                members: [member('me', 'Marie Dupont'), member('invited', 'Paul Invité', 'INVITED')],
+            });
+            mocks.listExpenses.mockResolvedValue({ items: [], nextCursor: null, totalAmount: 0 });
+        };
+
+        it('liste les membres avec leur statut', async () => {
+            withCreator(false);
+            render(<WalletDetail walletId="wallet-1" />);
+
+            const list = await screen.findByRole('list', { name: 'Détail des membres' });
+            expect(within(list).getByText('Marie Dupont')).toBeDefined();
+            expect(within(list).getByText('Membre')).toBeDefined();
+            expect(within(list).getByText('Paul Invité')).toBeDefined();
+            expect(within(list).getByText('Invitation en attente')).toBeDefined();
+        });
+
+        it('réserve le formulaire d’invitation au créateur d’un porte-monnaie ouvert', async () => {
+            withCreator(true);
+            render(<WalletDetail walletId="wallet-1" />);
+
+            expect(await screen.findByRole('button', { name: 'Envoyer l’invitation' })).toBeDefined();
+        });
+
+        it.each([
+            ['simple membre', false, 'OPEN'],
+            ['porte-monnaie clôturé', true, 'CLOSED'],
+        ] as const)('masque le formulaire pour un %s', async (_label, isCreator, status) => {
+            withCreator(isCreator, status);
+            render(<WalletDetail walletId="wallet-1" />);
+
+            await screen.findByRole('list', { name: 'Détail des membres' });
+            expect(screen.queryByRole('button', { name: 'Envoyer l’invitation' })).toBeNull();
+        });
+
+        it('recharge les membres après l’envoi d’une invitation', async () => {
+            withCreator(true);
+            mocks.sendInvitation.mockResolvedValue({});
+            render(<WalletDetail walletId="wallet-1" />);
+
+            await screen.findByRole('button', { name: 'Envoyer l’invitation' });
+            fireEvent.change(screen.getByLabelText(/Adresse email/), { target: { value: 'bob@example.com' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Envoyer l’invitation' }));
+
+            await screen.findByText('Une invitation a été envoyée à bob@example.com.');
+            expect(mocks.sendInvitation).toHaveBeenCalledWith('wallet-1', 'bob@example.com');
+            await waitFor(() => expect(mocks.getWalletDetails).toHaveBeenCalledTimes(2));
+        });
     });
 });
 
