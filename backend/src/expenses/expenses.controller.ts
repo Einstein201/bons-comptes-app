@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -15,6 +16,7 @@ import type { AuthenticatedRequest } from '../auth/authenticated-request.js';
 import { JwtAuthGuard } from '../auth/guards/auth.guard.js';
 import { CreateExpenseDto } from './dto/create-expense.dto.js';
 import { ListExpensesQueryDto } from './dto/list-expenses-query.dto.js';
+import { UpdateExpenseDto } from './dto/update-expense.dto.js';
 import { ExpensesService } from './expenses.service.js';
 
 @Controller('wallets/:walletId/expenses')
@@ -52,5 +54,20 @@ export class ExpensesController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.expensesService.remove(walletId, id, request.user.userId);
+  }
+
+  @Patch(':id')
+  update(
+    @Param('walletId') walletId: string,
+    @Param('id') id: string,
+    @Body() updateExpenseDto: UpdateExpenseDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.expensesService.update(
+      walletId,
+      id,
+      request.user.userId,
+      updateExpenseDto,
+    );
   }
 }

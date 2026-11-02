@@ -4,12 +4,22 @@ import { ExpensesService } from './expenses.service.js';
 
 describe('ExpensesController', () => {
   let controller: ExpensesController;
-  let expensesService: { create: Mock; findAll: Mock; remove: Mock };
+  let expensesService: {
+    create: Mock;
+    findAll: Mock;
+    remove: Mock;
+    update: Mock;
+  };
 
   const request = { user: { userId: 'user-123' } } as never;
 
   beforeEach(() => {
-    expensesService = { create: vi.fn(), findAll: vi.fn(), remove: vi.fn() };
+    expensesService = {
+      create: vi.fn(),
+      findAll: vi.fn(),
+      remove: vi.fn(),
+      update: vi.fn(),
+    };
     controller = new ExpensesController(
       expensesService as unknown as ExpensesService,
     );
@@ -57,6 +67,23 @@ describe('ExpensesController', () => {
       'wallet-1',
       'expense-1',
       'user-123',
+    );
+  });
+
+  it('updates an expense in the wallet of the URL as the authenticated user', async () => {
+    const dto = { amount: 5000 };
+    const expense = { id: 'expense-1', amount: 5000 };
+    expensesService.update.mockResolvedValue(expense);
+
+    await expect(
+      controller.update('wallet-1', 'expense-1', dto, request),
+    ).resolves.toBe(expense);
+
+    expect(expensesService.update).toHaveBeenCalledWith(
+      'wallet-1',
+      'expense-1',
+      'user-123',
+      dto,
     );
   });
 });
