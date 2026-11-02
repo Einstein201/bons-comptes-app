@@ -45,11 +45,9 @@ it('affiche un état vide explicite', async () => {
   await screen.findByText('Vous n’avez aucune invitation en attente.');
 });
 
-it('accepte avec l’identifiant d’invitation, recharge la liste et propose d’ouvrir le portefeuille', async () => {
+it('accepte avec l’identifiant d’invitation, retire la ligne sans recharger et propose d’ouvrir le portefeuille', async () => {
   vi.mocked(acceptInvitation).mockResolvedValue();
-  vi.mocked(getInvitations)
-    .mockResolvedValueOnce({ data: [first, second], nextCursor: null })
-    .mockResolvedValueOnce({ data: [second], nextCursor: null });
+  vi.mocked(getInvitations).mockResolvedValueOnce({ data: [first, second], nextCursor: null });
   render(<InvitationsPanel />);
 
   await screen.findByText('Vacances');
@@ -57,9 +55,10 @@ it('accepte avec l’identifiant d’invitation, recharge la liste et propose d�
 
   await screen.findByText('Vous avez rejoint le porte-monnaie « Vacances ».');
   expect(acceptInvitation).toHaveBeenCalledWith('invitation-1');
-  expect(getInvitations).toHaveBeenCalledTimes(2);
+  expect(getInvitations).toHaveBeenCalledTimes(1);
   expect(screen.queryByRole('button', { name: 'Accepter l’invitation à Vacances' })).toBeNull();
-  const link = screen.getByRole('link', { name: 'Ouvrir le porte-monnaie' });
+  expect(screen.getByRole('button', { name: /Accepter l’invitation à/ })).toBeTruthy();
+  const link = screen.getByRole('link', { name: 'Ouvrir « Vacances »' });
   expect(link.getAttribute('href')).toBe('/wallets/wallet-1');
 });
 

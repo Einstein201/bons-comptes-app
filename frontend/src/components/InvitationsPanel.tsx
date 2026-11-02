@@ -24,7 +24,9 @@ export function InvitationsPanel() {
   const [notice, setNotice] = useState<Notice>();
   const [loadingMore, setLoadingMore] = useState(false);
   const [acceptingId, setAcceptingId] = useState<string>();
-  const [acceptedIds, setAcceptedIds] = useState<Record<string, string>>({});
+  const [acceptedIds, setAcceptedIds] = useState<
+    Record<string, { walletId: string; title: string }>
+  >({});
   const busy = useRef(false);
 
   const load = useCallback(async () => {
@@ -77,12 +79,16 @@ export function InvitationsPanel() {
       return;
     }
 
-    setAcceptedIds((current) => ({ ...current, [invitation.id]: invitation.wallet.id }));
+    // On retire l'invitation localement : les pages déjà chargées sont conservées.
+    setInvitations((current) => current.filter((item) => item.id !== invitation.id));
+    setAcceptedIds((current) => ({
+      ...current,
+      [invitation.id]: { walletId: invitation.wallet.id, title: invitation.wallet.title },
+    }));
     setNotice({
       kind: 'success',
       message: `Vous avez rejoint le porte-monnaie « ${invitation.wallet.title} ».`,
     });
-    await load();
     busy.current = false;
     setAcceptingId(undefined);
   }
@@ -104,10 +110,10 @@ export function InvitationsPanel() {
 
       {joined.length > 0 ? (
         <ul className={styles.list} aria-label="Porte-monnaies rejoints">
-          {joined.map(([invitationId, walletId]) => (
+          {joined.map(([invitationId, { walletId, title }]) => (
             <li key={invitationId}>
               <ButtonLink href={`/wallets/${encodeURIComponent(walletId)}`} variant="primary">
-                Ouvrir le porte-monnaie
+                Ouvrir « {title} »
               </ButtonLink>
             </li>
           ))}
