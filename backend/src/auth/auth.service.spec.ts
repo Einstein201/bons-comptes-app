@@ -18,6 +18,7 @@ describe('AuthService', () => {
       update: ReturnType<typeof vi.fn>;
     };
   };
+  let prismaMock: { user: { findUnique: ReturnType<typeof vi.fn> } };
   let jwtMock: {
     sign: ReturnType<typeof vi.fn>;
     verify: ReturnType<typeof vi.fn>;
@@ -275,6 +276,29 @@ describe('AuthService', () => {
       UnauthorizedException,
     );
   });
+  it('setRefreshCookie pose un cookie httpOnly de 7 jours', () => {
+    const res = { cookie: vi.fn() };
+
+    service.setRefreshCookie(res as unknown as Response, 'tok');
+
+  it('renvoie le nom actuel de l’utilisateur sans données sensibles', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      name: 'Alice mise à jour',
+      password: 'secret-hash',
+    });
+
+    await expect(service.me('user-1')).resolves.toEqual({
+      userId: 'user-1',
+      name: 'Alice mise à jour',
+    });
+
+    expect(prismaMock.user.findUnique).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      select: { id: true, name: true },
+    });
+  });
+
   it('setRefreshCookie pose un cookie httpOnly de 7 jours', () => {
     const res = { cookie: vi.fn() };
 

@@ -19,6 +19,9 @@ describe('User registration (e2e)', () => {
   }
 
   beforeAll(async () => {
+    process.env.JWT_SECRET = 'if41-test-access-secret';
+    process.env.JWT_REFRESH_SECRET = 'if41-test-refresh-secret';
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -106,6 +109,73 @@ describe('User registration (e2e)', () => {
     ],
   ])('rejects a request with %s', async (_case, input) => {
     await request(app.getHttpServer()).post('/users').send(input).expect(400);
+  });
+
+  it('updates the authenticated profile name and exposes it through auth/me', async () => {
+    const input = {
+      email: createTestEmail(),
+      name: 'Alice',
+      password: 'motdepasse123',
+    };
+    const server = app.getHttpServer();
+
+    await request(server).post('/users').send(input).expect(201);
+    const login = await request(server)
+      .post('/auth/login')
+      .send({ email: input.email, password: input.password })
+      .expect(200);
+
+    const authorization = `Bearer ${login.body.accessToken}`;
+    const updated = await request(server)
+      .patch('/users/me')
+      .set('Authorization', authorization)
+      .send({ name: 'Alice mise à jour' })
+      .expect(200);
+
+    expect(updated.body).toEqual({
+      userId: expect.any(String),
+      name: 'Alice mise à jour',
+    });
+    expect(updated.body).not.toHaveProperty('password');
+
+    await request(server)
+      .get('/auth/me')
+      .set('Authorization', authorization)
+      .expect(200)
+      .expect({ userId: updated.body.userId, name: 'Alice mise à jour' });
+  });
+
+  it.each([
+    ['missing', {}],
+    ['empty', { name: '' }],
+    ['whitespace only', { name: '   \t\n' }],
+    ['not a string', { name: 123 }],
+    ['too long', { name: 'a'.repeat(101) }],
+    ['unexpected user id', { name: 'Bob', userId: 'another-user' }],
+  ])('rejects an invalid profile update: %s', async (_case, body) => {
+    const input = {
+      email: createTestEmail(),
+      name: 'Validation user',
+      password: 'motdepasse123',
+    };
+    await request(app.getHttpServer()).post('/users').send(input).expect(201);
+    const login = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email: input.email, password: input.password })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .patch('/users/me')
+      .send(body)
+      .set('Authorization', `Bearer ${login.body.accessToken}`)
+      .expect(400);
+  });
+
+  it('rejects a profile update without authentication', async () => {
+    await request(app.getHttpServer())
+      .patch('/users/me')
+      .send({ name: 'Alice' })
+      .expect(401);
   });
 
   afterAll(async () => {

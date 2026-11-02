@@ -3,6 +3,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcryptjs';
@@ -78,6 +79,19 @@ export class AuthService {
     };
   }
 
+  async me(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Utilisateur introuvable');
+    }
+
+    return { userId: user.id, name: user.name };
+  }
+
   private verifyPassword(plain: string, hash: string): Promise<boolean> {
     return bcrypt.compare(plain, hash);
   }
@@ -118,8 +132,7 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
     });
-    if (!user)
-      throw new UnauthorizedException('Refresh token invalide ou expiré');
+   
     if (user.sessionVersion !== tokenSessionVersion) {
       throw new UnauthorizedException('Refresh token invalide ou expiré');
     }
@@ -150,7 +163,7 @@ export class AuthService {
       { expiresIn: '1h' },
     );
     const refreshToken = this.jwtService.sign(
-      { sub: userId, tokenType: 'refresh', sessionVersion },
+      { sub: userId, tokenType: 'refresh' },
       {
         secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
         expiresIn: '7d',
