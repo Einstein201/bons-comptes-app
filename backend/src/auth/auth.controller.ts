@@ -54,11 +54,15 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('change-password')
   @HttpCode(200)
-  changePassword(
+  async changePassword(
     @Body() body: ChangePasswordDto,
     @Req() req: AuthenticatedRequest,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.authService.changePassword(req.user.userId, body);
+    const { accessToken, refreshToken, message } =
+      await this.authService.changePassword(req.user.userId, body);
+    this.authService.setRefreshCookie(res, refreshToken);
+    return { accessToken, message };
   }
 
   @UseGuards(JwtAuthGuard)
