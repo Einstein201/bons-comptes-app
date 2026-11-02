@@ -50,6 +50,16 @@ describe('protection des pages', () => {
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/login'));
   });
 
+  it('protège la page de bilan et conserve son chemin pour la connexion', async () => {
+    mocks.status = 'unauthenticated';
+    mocks.pathname = '/wallets/wallet-1';
+    render(<ProtectedRoute><p>Bilan financier</p></ProtectedRoute>);
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(
+      '/login?next=%2Fwallets%2Fwallet-1',
+    ));
+    expect(screen.queryByText('Bilan financier')).toBeNull();
+  });
+
   it('affiche le contenu uniquement après authentification', () => {
     mocks.status = 'authenticated';
     render(<ProtectedRoute><p>Contenu privé</p></ProtectedRoute>);

@@ -1,0 +1,4 @@
+.main {
+  width: min(100% - 32px, 1040px);
+  margin: 48px auto;
+}
