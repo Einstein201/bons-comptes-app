@@ -259,6 +259,37 @@ describe('détail d’un porte-monnaie', () => {
         expect(mocks.listExpenses).toHaveBeenLastCalledWith('wallet-1', { cursor: 'cursor-1' });
     });
 
+    it('garde le total à jour quand une suppression se termine pendant le chargement de la page suivante', async () => {
+        let resolveNextPage!: (page: unknown) => void;
+        mocks.listExpenses
+            .mockResolvedValueOnce({
+                items: [expense('e-2', '2025-06-21', 1000, 'me', 'Courses')],
+                nextCursor: 'cursor-1',
+                totalAmount: 5000,
+            })
+            .mockReturnValueOnce(new Promise((resolve) => { resolveNextPage = resolve; }));
+        mocks.deleteExpense.mockResolvedValue(undefined);
+
+        render(<WalletDetail walletId="wallet-1" />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Afficher plus de dépenses' }));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Supprimer la dépense « Courses »' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }));
+        await screen.findByText(/a été supprimée/);
+        expect(plain(screen.getByText(/40,00/).textContent)).toBe('40,00 €');
+
+        // La page suivante arrive après la suppression, avec le total d'avant.
+        resolveNextPage({
+            items: [expense('e-1', '2025-06-12', 1500, 'chloe', 'Électricité')],
+            nextCursor: null,
+            totalAmount: 5000,
+        });
+
+        expect(await screen.findByText('Électricité')).toBeTruthy();
+        expect(plain(screen.getByText(/40,00/).textContent)).toBe('40,00 €');
+        expect(screen.queryByText(/50,00/)).toBeNull();
+    });
+
     it('n’affiche plus l’ancien porte-monnaie quand l’identifiant change', async () => {
         mocks.listExpenses.mockResolvedValueOnce({
             items: [expense('e-1', '2025-06-12', 100, 'me', 'Courses')],
