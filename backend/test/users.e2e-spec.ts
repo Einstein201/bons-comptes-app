@@ -148,16 +148,34 @@ describe('User registration (e2e)', () => {
   it.each([
     ['missing', {}],
     ['empty', { name: '' }],
+    ['whitespace only', { name: '   \t\n' }],
     ['not a string', { name: 123 }],
     ['too long', { name: 'a'.repeat(101) }],
     ['unexpected user id', { name: 'Bob', userId: 'another-user' }],
   ])('rejects an invalid profile update: %s', async (_case, body) => {
+    const input = {
+      email: createTestEmail(),
+      name: 'Validation user',
+      password: 'motdepasse123',
+    };
+    await request(app.getHttpServer()).post('/users').send(input).expect(201);
+    const login = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email: input.email, password: input.password })
+      .expect(200);
+
     await request(app.getHttpServer())
       .patch('/users/me')
       .send(body)
-      .expect((response) => {
-        expect([400, 401]).toContain(response.status);
-      });
+      .set('Authorization', `Bearer ${login.body.accessToken}`)
+      .expect(400);
+  });
+
+  it('rejects a profile update without authentication', async () => {
+    await request(app.getHttpServer())
+      .patch('/users/me')
+      .send({ name: 'Alice' })
+      .expect(401);
   });
 
   afterAll(async () => {
