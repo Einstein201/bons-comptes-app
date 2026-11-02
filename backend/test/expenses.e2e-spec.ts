@@ -80,6 +80,30 @@ describe('Expenses (e2e)', () => {
       .send(body);
   }
 
+  function patchExpense(
+    walletId: string,
+    expenseId: string,
+    user: TestUser,
+    body: object,
+  ) {
+    return request(app.getHttpServer())
+      .patch(`/wallets/${walletId}/expenses/${expenseId}`)
+      .set('Authorization', 'Bearer ' + user.token)
+      .send(body);
+  }
+
+  function closeWallet(walletId: string, user: TestUser) {
+    return request(app.getHttpServer())
+      .post(`/wallets/${walletId}/close`)
+      .set('Authorization', 'Bearer ' + user.token);
+  }
+
+  function getBalance(walletId: string, user: TestUser) {
+    return request(app.getHttpServer())
+      .get(`/wallets/${walletId}/balance`)
+      .set('Authorization', 'Bearer ' + user.token);
+  }
+
   function getExpenses(
     walletId: string,
     user: TestUser,
@@ -269,6 +293,183 @@ describe('Expenses (e2e)', () => {
         ...change,
       }).expect(400);
     });
+  });
+
+  describe('PATCH /wallets/:walletId/expenses/:expenseId', () => {
+    async function createEditableExpense(
+      walletId = openWalletId,
+      body = validExpense,
+    ) {
+      const response = await postExpense(walletId, alice, body).expect(201);
+      return response.body.id as string;
+    }
+
+    it('requires authentication', async () => {
+      const expenseId = await createEditableExpense();
+
+      await request(app.getHttpServer())
+        .patch(`/wallets/${openWalletId}/expenses/${expenseId}`)
+        .send({ title: 'Corrigé' })
+        .expect(401);
+    });
+
+    it('lets the payer update title and amount while preserving the purchase date', async () => {
+      const expenseId = await createEditableExpense();
+      const oldUpdatedAt = new Date('2020-01-01T00:00:00.000Z');
+      await prisma.wallet.update({
+        where: { id: openWalletId },
+        data: { updatedAt: oldUpdatedAt },
+      });
+
+      const response = await patchExpense(
+        openWalletId,
+        expenseId,
+        alice,
+        { title: 'Train corrigé', amount: 6000 },
+      ).expect(200);
+
+      expect(response.body).toEqual({
+        id: expenseId,
+        title: 'Train corrigé',
+        amount: 6000,
+        date: validExpense.date,
+        createdAt: expect.any(String),
+        paidBy: { id: alice.id, name: 'Alice' },
+      });
+
+      const saved = await prisma.expense.findUniqueOrThrow({
+        where: { id: expenseId },
+      });
+      expect(saved.title).toBe('Train corrigé');
+      expect(saved.amount).toBe(6000);
+      expect(saved.date.toISOString().slice(0, 10)).toBe(validExpense.date);
+      expect(saved.createdById).toBe(alice.id);
+
+      const wallet = await prisma.wallet.findUniqueOrThrow({
+        where: { id: openWalletId },
+      });
+      expect(wallet.updatedAt.getTime()).toBeGreaterThan(oldUpdatedAt.getTime());
+    });
+
+    it('allows updating only one field and leaves the other fields unchanged', async () => {
+      const expenseId = await createEditableExpense();
+
+      const response = await patchExpense(
+        openWalletId,
+        expenseId,
+        alice,
+        { title: 'Titre corrigé' },
+      ).expect(200);
+
+      expect(response.body.title).toBe('Titre corrigé');
+      expect(response.body.amount).toBe(validExpense.amount);
+      expect(response.body.date).toBe(validExpense.date);
+    });
+
+    it('returns 403 when a non-payer member attempts to update the expense', async () => {
+      const expenseId = await createEditableExpense();
+
+      await patchExpense(openWalletId, expenseId, bob, {
+        amount: 6000,
+      }).expect(403);
+
+      const unchanged = await prisma.expense.findUniqueOrThrow({
+        where: { id: expenseId },
+      });
+      expect(unchanged.amount).toBe(validExpense.amount);
+    });
+
+    it('returns 404 when the expense belongs to another wallet', async () => {
+      const expenseId = await createEditableExpense();
+
+      await patchExpense(emptyWalletId, expenseId, alice, {
+        title: 'Ne doit pas être modifié',
+      }).expect(404);
+
+      const unchanged = await prisma.expense.findUniqueOrThrow({
+        where: { id: expenseId },
+      });
+      expect(unchanged.title).toBe(validExpense.title);
+    });
+
+    it('returns 409 when the wallet is closed', async () => {
+      const expenseId = (await prisma.expense.findFirstOrThrow({
+        where: { walletId: closedWalletId },
+        select: { id: true },
+      })).id;
+
+      await patchExpense(closedWalletId, expenseId, alice, {
+        title: 'Modification refusée',
+      }).expect(409);
+    });
+
+    it.each([
+      ['empty title', { title: '' }],
+      ['title over 100 characters', { title: 'x'.repeat(101) }],
+      ['zero amount', { amount: 0 }],
+      ['decimal amount', { amount: 4599.5 }],
+      ['date', { title: 'Titre valide', date: '2026-10-26' }],
+      ['payer id', { title: 'Titre valide', paidById: randomUUID() }],
+      ['creator id', { title: 'Titre valide', createdById: randomUUID() }],
+    ])('returns 400 for an invalid %s field', async (_label, body) => {
+      const expenseId = await createEditableExpense();
+      await patchExpense(openWalletId, expenseId, alice, body).expect(400);
+    });
+
+    it(
+      'updates the wallet balance after the expense amount changes',
+      async () => {
+        const walletId = await createWallet(alice, 'Correction de dépense');
+        await addMembership(walletId, bob.id, 'MEMBER');
+        const expenseId = await createEditableExpense(walletId, {
+          ...validExpense,
+          amount: 6000,
+        });
+
+        await patchExpense(walletId, expenseId, alice, { amount: 8000 }).expect(200);
+        await closeWallet(walletId, alice).expect(200);
+
+        const response = await getBalance(walletId, alice).expect(200);
+        expect(response.body.totalAmount).toBe(8000);
+        const balances = new Map(
+          response.body.balances.map(
+            (member: { userId: string; paidAmount: number; balance: number }) => [
+              member.userId,
+              member,
+            ],
+          ),
+        );
+        expect(balances.get(alice.id)).toMatchObject({
+          paidAmount: 8000,
+          balance: 4000,
+        });
+        expect(balances.get(bob.id)).toMatchObject({
+          paidAmount: 0,
+          balance: -4000,
+        });
+      },
+      15000,
+    );
+
+    it(
+      'returns 409 when changing the amount of an expense with splits',
+      async () => {
+        const expenseId = await createEditableExpense();
+        await prisma.expenseSplit.create({
+          data: { expenseId, userId: alice.id, amount: validExpense.amount },
+        });
+
+        await patchExpense(openWalletId, expenseId, alice, {
+          amount: 6000,
+        }).expect(409);
+
+        const unchanged = await prisma.expense.findUniqueOrThrow({
+          where: { id: expenseId },
+        });
+        expect(unchanged.amount).toBe(validExpense.amount);
+      },
+      15000,
+    );
   });
 
   describe('GET /wallets/:walletId/expenses', () => {
