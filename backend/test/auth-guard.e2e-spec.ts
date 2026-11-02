@@ -7,9 +7,11 @@ import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from '../src/auth/auth.module.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 
+const findUnique = vi.fn();
+
 @Global()
 @Module({
-  providers: [{ provide: PrismaService, useValue: { user: { findUnique: vi.fn() } } }],
+  providers: [{ provide: PrismaService, useValue: { user: { findUnique } } }],
   exports: [PrismaService],
 })
 class PrismaStubModule {}
@@ -23,12 +25,17 @@ describe('GET /auth/me (guard)', () => {
     process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
 
     const moduleRef = await Test.createTestingModule({
-      imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaStubModule, AuthModule],
+      imports: [
+        ConfigModule.forRoot({ isGlobal: true }),
+        PrismaStubModule,
+        AuthModule,
+      ],
     }).compile();
 
     app = moduleRef.createNestApplication();
     await app.init();
     jwt = moduleRef.get(JwtService);
+    findUnique.mockResolvedValue({ id: '1', name: 'Alice' });
   });
 
   afterAll(() => app.close());
@@ -61,6 +68,6 @@ describe('GET /auth/me (guard)', () => {
       .get('/auth/me')
       .set('Authorization', `Bearer ${access}`)
       .expect(200);
-   expect(res.body).toEqual({ userId: '1' });
+    expect(res.body).toEqual({ userId: '1', name: 'Alice' });
   });
 });
