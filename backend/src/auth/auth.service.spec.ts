@@ -213,7 +213,7 @@ describe('AuthService', () => {
       password: currentHash,
       sessionVersion: 0,
     });
-    prismaMock.user.update.mockResolvedValue({ id: '1' });
+    prismaMock.user.update.mockResolvedValue({ sessionVersion: 1 });
 
     await expect(
       service.changePassword('1', {
@@ -236,6 +236,7 @@ describe('AuthService', () => {
         password: expect.stringMatching(/^\$2[aby]\$10\$/),
         sessionVersion: { increment: 1 },
       },
+      select: { sessionVersion: true },
     });
     const update = prismaMock.user.update.mock.calls[0][0];
     expect(
@@ -275,6 +276,7 @@ describe('AuthService', () => {
       UnauthorizedException,
     );
   });
+
   it('renvoie le nom actuel de l’utilisateur sans données sensibles', async () => {
     prismaMock.user.findUnique.mockResolvedValue({
       id: 'user-1',

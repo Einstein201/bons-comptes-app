@@ -63,15 +63,16 @@ export class AuthService {
     }
 
     const password = await bcrypt.hash(dto.newPassword, BCRYPT_ROUNDS);
-    await this.prisma.user.update({
+    const updatedUser = await this.prisma.user.update({
       where: { id: userId },
       data: {
         password,
         sessionVersion: { increment: 1 },
       },
+      select: { sessionVersion: true },
     });
 
-    const tokens = this.issueTokens(userId, user.sessionVersion + 1);
+    const tokens = this.issueTokens(userId, updatedUser.sessionVersion);
     return {
       message: 'Mot de passe modifié avec succès.',
       ...tokens,
