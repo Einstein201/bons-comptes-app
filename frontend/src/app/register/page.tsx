@@ -7,9 +7,11 @@ export const metadata: Metadata = { title: 'Créer un compte' };
 
 export default function RegisterPage() {
   return (
-    <main className={styles.page}>
+    <div className={styles.page}>
       <AppHeader />
-      <AuthForm mode="register" />
-    </main>
+      <main className={styles.content}>
+        <AuthForm mode="register" />
+      </main>
+    </div>
   );
 }

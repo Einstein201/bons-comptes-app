@@ -7,9 +7,11 @@ export const metadata: Metadata = { title: 'Connexion' };
 
 export default function LoginPage() {
   return (
-    <main className={styles.page}>
+    <div className={styles.page}>
       <AppHeader />
-      <AuthForm mode="login" />
-    </main>
+      <main className={styles.content}>
+        <AuthForm mode="login" />
+      </main>
+    </div>
   );
 }

@@ -13,7 +13,9 @@ export default function HomePage() {
     <ProtectedRoute>
       <div className={styles.page}>
         <AppHeader />
-        <WalletDashboard />
+        <div className={styles.content}>
+          <WalletDashboard />
+        </div>
       </div>
     </ProtectedRoute>
   );
