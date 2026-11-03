@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../services/api';
 import type { Expense } from '../services/expenses';
 import { mergeExpenses, WalletDetail } from './WalletDetail';
+import { WalletTabProvider } from './WalletTabs';
 
 const mocks = vi.hoisted(() => ({
     getWalletDetails: vi.fn(),
@@ -373,6 +374,43 @@ describe('détail d’un porte-monnaie', () => {
             await screen.findByText('Une invitation a été envoyée à bob@example.com.');
             expect(mocks.sendInvitation).toHaveBeenCalledWith('wallet-1', 'bob@example.com');
             await waitFor(() => expect(mocks.getWalletDetails).toHaveBeenCalledTimes(2));
+        });
+    });
+
+    describe('onglets', () => {
+        const load = () => {
+            mocks.getWalletDetails.mockResolvedValue({
+                wallet: { id: 'wallet-1', title: 'Voyage', description: null, status: 'OPEN', createdAt: '', isCreator: true },
+                members: [member('me', 'Marie Dupont')],
+            });
+            mocks.listExpenses.mockResolvedValue({ items: [], nextCursor: null, totalAmount: 0 });
+        };
+
+        it('n’affiche que les membres dans l’onglet Membres', async () => {
+            load();
+            render(<WalletTabProvider value="members"><WalletDetail walletId="wallet-1" /></WalletTabProvider>);
+
+            await screen.findByRole('list', { name: 'Détail des membres' });
+            expect(screen.queryByRole('button', { name: /Ajouter une dépense/ })).toBeNull();
+            expect(screen.queryByText('Total des dépenses :')).toBeNull();
+        });
+
+        it('n’affiche que les dépenses dans l’onglet Dépenses', async () => {
+            load();
+            render(<WalletTabProvider value="expenses"><WalletDetail walletId="wallet-1" /></WalletTabProvider>);
+
+            await screen.findByText('Total des dépenses :');
+            expect(screen.queryByRole('list', { name: 'Détail des membres' })).toBeNull();
+            expect(screen.queryByRole('button', { name: 'Envoyer l’invitation' })).toBeNull();
+        });
+
+        it('n’affiche rien dans les onglets de clôture et de remboursements', () => {
+            load();
+            const { container } = render(
+                <WalletTabProvider value="closure"><WalletDetail walletId="wallet-1" /></WalletTabProvider>,
+            );
+
+            expect(container.textContent).toBe('');
         });
     });
 });

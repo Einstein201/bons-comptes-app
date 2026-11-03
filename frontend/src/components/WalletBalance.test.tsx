@@ -56,8 +56,13 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+async function openTab(name: string) {
+  fireEvent.click(await screen.findByRole('tab', { name }));
+}
+
 it('réserve le bouton au créateur et ne charge pas le bilan ouvert', async () => {
   render(<WalletBalance walletId="wallet-1" />);
+  await openTab('Clôture');
   await screen.findByRole('button', { name: 'Clôturer le porte-monnaie' });
   expect(mocks.getWalletBalance).not.toHaveBeenCalled();
   expect(mocks.getOptimizedPayments).not.toHaveBeenCalled();
@@ -67,6 +72,7 @@ it('réserve le bouton au créateur et ne charge pas le bilan ouvert', async () 
 it('ne propose aucune action de clôture à un autre membre', async () => {
   mocks.getWallet.mockResolvedValue({ ...detail, wallet: { ...detail.wallet, isCreator: false } });
   render(<WalletBalance walletId="wallet-1" />);
+  await openTab('Clôture');
   await screen.findByText('Seul le créateur peut clôturer ce porte-monnaie.');
   expect(screen.queryByRole('button', { name: /clôture|Clôturer/ })).toBeNull();
   expect(mocks.closeWallet).not.toHaveBeenCalled();
@@ -74,6 +80,7 @@ it('ne propose aucune action de clôture à un autre membre', async () => {
 
 it('demande une confirmation annulable sans appeler le backend', async () => {
   render(<WalletBalance walletId="wallet-1" />);
+  await openTab('Clôture');
   fireEvent.click(await screen.findByRole('button', { name: 'Clôturer le porte-monnaie' }));
   fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
   expect(mocks.closeWallet).not.toHaveBeenCalled();
@@ -83,6 +90,7 @@ it('clôture puis recharge le détail et les deux routes financières', async ()
   mocks.getWallet.mockResolvedValueOnce(detail).mockResolvedValue(closedDetail);
   mocks.closeWallet.mockResolvedValue({ status: 'CLOSED' });
   render(<WalletBalance walletId="wallet-1" />);
+  await openTab('Clôture');
   fireEvent.click(await screen.findByRole('button', { name: 'Clôturer le porte-monnaie' }));
   fireEvent.click(screen.getByRole('button', { name: 'Confirmer la clôture' }));
   await screen.findByRole('heading', { name: 'Bilan financier' });
@@ -98,6 +106,7 @@ it('affiche les soldes signés et les deux montants distincts pour un membre', a
     ...closedDetail, wallet: { ...closedDetail.wallet, isCreator: false },
   });
   render(<WalletBalance walletId="wallet-1" />);
+  await openTab('Bilan');
   const table = await screen.findByRole('table');
   expect(within(table).getByText('-40,00 €')).toBeDefined();
   expect(screen.getByText('Reste à régler :').textContent).toContain('40,00');
@@ -111,6 +120,7 @@ it('ne confond pas un déclarable nul avec un virement réglé', async () => {
     ...plan, transfers: [{ ...plan.transfers[0], declarableAmount: 0 }],
   });
   render(<WalletBalance walletId="wallet-1" />);
+  await openTab('Bilan');
   await screen.findByText('Le reste dû est entièrement en attente de validation.');
   expect(screen.queryByText('Tous les comptes sont réglés.')).toBeNull();
 });
@@ -133,12 +143,14 @@ it('rejette des réponses financières incohérentes puis permet de réessayer',
   await screen.findByRole('alert');
   expect(screen.queryByRole('table')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
+  await openTab('Bilan');
   await screen.findByRole('table');
 });
 
 it('signale un échec de clôture sans charger de bilan', async () => {
   mocks.closeWallet.mockRejectedValue(new ApiError(409));
   render(<WalletBalance walletId="wallet-1" />);
+  await openTab('Clôture');
   fireEvent.click(await screen.findByRole('button', { name: 'Clôturer le porte-monnaie' }));
   fireEvent.click(screen.getByRole('button', { name: 'Confirmer la clôture' }));
   await screen.findByRole('alert');
@@ -148,6 +160,7 @@ it('signale un échec de clôture sans charger de bilan', async () => {
 it('masque le bilan précédent pendant une actualisation qui échoue', async () => {
   mocks.getWallet.mockResolvedValueOnce(closedDetail).mockRejectedValue(new TypeError('Network'));
   render(<WalletBalance walletId="wallet-1" />);
+  await openTab('Bilan');
   await screen.findByRole('table');
   fireEvent.click(screen.getByRole('button', { name: 'Actualiser' }));
   await screen.findByRole('alert');
@@ -159,6 +172,7 @@ it('refuse une seconde clôture pendant la requête', async () => {
   mocks.closeWallet.mockImplementation(() => new Promise((resolve) => { resolveClose = resolve; }));
   mocks.getWallet.mockResolvedValueOnce(detail).mockResolvedValue(closedDetail);
   render(<WalletBalance walletId="wallet-1" />);
+  await openTab('Clôture');
   fireEvent.click(await screen.findByRole('button', { name: 'Clôturer le porte-monnaie' }));
   fireEvent.click(screen.getByRole('button', { name: 'Confirmer la clôture' }));
   const pending = screen.getByRole('button', { name: 'Clôture en cours…' });
@@ -192,6 +206,7 @@ it('attend les deux réponses avant de présenter le bilan', async () => {
   expect(screen.getByRole('status').textContent).toContain('Chargement');
   expect(screen.queryByRole('table')).toBeNull();
   resolvePlan(plan);
+  await openTab('Bilan');
   await screen.findByRole('table');
 });
 
@@ -203,6 +218,7 @@ it('affiche des comptes réglés uniquement avec des soldes nuls', async () => {
   });
   mocks.getOptimizedPayments.mockResolvedValue({ ...plan, transfers: [] });
   render(<WalletBalance walletId="wallet-1" />);
+  await openTab('Bilan');
   await screen.findByText('Tous les comptes sont réglés.');
   expect(screen.queryByRole('button', { name: /Clôturer|Confirmer/ })).toBeNull();
 });
@@ -252,6 +268,7 @@ it('accepte les paires initiales même lorsqu’un membre reçoit et émet un vi
     ],
   });
   render(<WalletBalance walletId="wallet-1" />);
+  await openTab('Bilan');
   await screen.findByRole('table');
   expect(screen.getByText('Alice → Bob')).toBeDefined();
 });
@@ -261,10 +278,63 @@ it('confirme la clôture mais masque le bilan si son rechargement échoue', asyn
   mocks.closeWallet.mockResolvedValue({ status: 'CLOSED' });
   mocks.getWalletBalance.mockRejectedValue(new TypeError('Network'));
   render(<WalletBalance walletId="wallet-1" />);
+  await openTab('Clôture');
   fireEvent.click(await screen.findByRole('button', { name: 'Clôturer le porte-monnaie' }));
   fireEvent.click(screen.getByRole('button', { name: 'Confirmer la clôture' }));
   await screen.findByRole('alert');
   expect(screen.getByRole('status').textContent).toContain('a été clôturé');
   expect(screen.queryByRole('table')).toBeNull();
   expect(mocks.closeWallet).toHaveBeenCalledTimes(1);
+});
+
+it('propose les onglets d’un porte-monnaie ouvert et réserve la clôture à son onglet', async () => {
+  render(<WalletBalance walletId="wallet-1" />);
+  const tabs = await screen.findAllByRole('tab');
+  expect(tabs.map((tab) => tab.textContent)).toEqual(['Dépenses', 'Membres', 'Clôture']);
+  expect(tabs[0].getAttribute('aria-selected')).toBe('true');
+  expect(screen.queryByRole('button', { name: 'Clôturer le porte-monnaie' })).toBeNull();
+  await openTab('Clôture');
+  expect(screen.getByRole('button', { name: 'Clôturer le porte-monnaie' })).toBeDefined();
+  expect(screen.getByRole('tab', { name: 'Clôture' }).getAttribute('aria-selected')).toBe('true');
+});
+
+it('propose Bilan et Remboursements après la clôture, sans onglet Clôture', async () => {
+  mocks.getWallet.mockResolvedValue(closedDetail);
+  render(<WalletBalance walletId="wallet-1" />);
+  const tabs = await screen.findAllByRole('tab');
+  expect(tabs.map((tab) => tab.textContent)).toEqual([
+    'Dépenses', 'Membres', 'Bilan', 'Remboursements',
+  ]);
+  expect(screen.queryByRole('table')).toBeNull();
+  await openTab('Remboursements');
+  expect(screen.queryByRole('table')).toBeNull();
+  await openTab('Bilan');
+  await screen.findByRole('table');
+});
+
+it('change d’onglet au clavier avec les flèches, Début et Fin', async () => {
+  render(<WalletBalance walletId="wallet-1" />);
+  const first = await screen.findByRole('tab', { name: 'Dépenses' });
+  fireEvent.keyDown(first, { key: 'ArrowRight' });
+  expect(screen.getByRole('tab', { name: 'Membres' }).getAttribute('aria-selected')).toBe('true');
+  fireEvent.keyDown(screen.getByRole('tab', { name: 'Membres' }), { key: 'End' });
+  expect(screen.getByRole('tab', { name: 'Clôture' }).getAttribute('aria-selected')).toBe('true');
+  fireEvent.keyDown(screen.getByRole('tab', { name: 'Clôture' }), { key: 'ArrowRight' });
+  expect(screen.getByRole('tab', { name: 'Dépenses' }).getAttribute('aria-selected')).toBe('true');
+  fireEvent.keyDown(screen.getByRole('tab', { name: 'Dépenses' }), { key: 'ArrowLeft' });
+  expect(screen.getByRole('tab', { name: 'Clôture' }).getAttribute('aria-selected')).toBe('true');
+  fireEvent.keyDown(screen.getByRole('tab', { name: 'Clôture' }), { key: 'Home' });
+  expect(screen.getByRole('tab', { name: 'Dépenses' }).getAttribute('aria-selected')).toBe('true');
+});
+
+it('affiche automatiquement le bilan après une clôture réussie', async () => {
+  mocks.getWallet.mockResolvedValueOnce(detail).mockResolvedValue(closedDetail);
+  mocks.closeWallet.mockResolvedValue({ status: 'CLOSED' });
+  render(<WalletBalance walletId="wallet-1" />);
+  await openTab('Clôture');
+  fireEvent.click(await screen.findByRole('button', { name: 'Clôturer le porte-monnaie' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmer la clôture' }));
+  await screen.findByRole('table');
+  expect(screen.getByRole('tab', { name: 'Bilan' }).getAttribute('aria-selected')).toBe('true');
+  expect(screen.queryByRole('tab', { name: 'Clôture' })).toBeNull();
 });

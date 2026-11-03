@@ -169,7 +169,7 @@ it('déclare un montant en euros converti en centimes et actualise liste et bila
     toUserId: 'alice',
     amount: 1234,
   });
-  expect(getRepayments).toHaveBeenCalledTimes(2);
+  await waitFor(() => expect(getRepayments).toHaveBeenCalledTimes(2));
   expect(financialRefresh).toHaveBeenCalledOnce();
 });
 
@@ -207,7 +207,7 @@ it('confirme le remboursement puis recharge les données financières', async ()
 
   await screen.findByText('Le remboursement a été confirmé.');
   expect(confirmRepayment).toHaveBeenCalledWith('wallet-1', first.id);
-  expect(getRepayments).toHaveBeenCalledTimes(2);
+  await waitFor(() => expect(getRepayments).toHaveBeenCalledTimes(2));
   expect(financialRefresh).toHaveBeenCalledOnce();
 });
 
@@ -232,7 +232,7 @@ it('annule le remboursement lorsque canCancel est vrai', async () => {
 
   await screen.findByText('Le remboursement a été annulé.');
   expect(cancelRepayment).toHaveBeenCalledWith('wallet-1', first.id);
-  expect(getRepayments).toHaveBeenCalledTimes(2);
+  await waitFor(() => expect(getRepayments).toHaveBeenCalledTimes(2));
 });
 
 it('signale un conflit 409 sans afficher un succès et actualise les données', async () => {
