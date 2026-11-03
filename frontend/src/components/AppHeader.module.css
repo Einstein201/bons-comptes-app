@@ -42,26 +42,6 @@
   gap: 8px;
 }
 
-.iconButton {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--color-icon);
-  font-size: 20px;
-  cursor: pointer;
-  text-decoration: none;
-}
-
-.iconButton:hover {
-  background: var(--color-surface-muted);
-}
-
-.iconButton:focus-visible,
 .brand:focus-visible,
 .logout:focus-visible,
 .login:focus-visible {
