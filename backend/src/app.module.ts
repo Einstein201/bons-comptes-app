@@ -12,6 +12,7 @@ import { UsersModule } from './users/users.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { WalletsModule } from './wallets/wallets.module.js';
 import { InvitationsModule } from './invitations/invitations.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { InvitationsModule } from './invitations/invitations.module.js';
     InvitationsModule,
     ClosureModule,
     RepaymentsModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
