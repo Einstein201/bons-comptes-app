@@ -8,6 +8,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { calculateBalances } from '../closure/balance-calculator.js';
 import { loadBalanceData } from '../closure/balance-data.js';
+import { notifyRepaymentConfirmed } from '../notifications/notification-factory.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { decodeCursor, encodeCursor } from '../wallets/wallet-pagination.js';
 import type { CreateRepaymentDto } from './dto/create-repayment.dto.js';
@@ -176,10 +177,19 @@ export class RepaymentsService {
       );
     }
 
-    return this.changePendingStatus(walletId, repaymentId, {
-      status: 'PAID',
-      paidAt: new Date(),
-    });
+    return this.changePendingStatus(
+      walletId,
+      repaymentId,
+      { status: 'PAID', paidAt: new Date() },
+      (transaction, confirmed) =>
+        notifyRepaymentConfirmed(transaction, {
+          walletId,
+          actorId: userId,
+          fromUserId: confirmed.fromUserId,
+          toUserId: confirmed.toUserId,
+          amount: confirmed.amount,
+        }),
+    );
   }
 
   async cancel(walletId: string, repaymentId: string, userId: string) {
@@ -266,6 +276,10 @@ export class RepaymentsService {
     walletId: string,
     repaymentId: string,
     data: Prisma.RepaymentUpdateManyMutationInput,
+    afterUpdate?: (
+      transaction: Prisma.TransactionClient,
+      repayment: { fromUserId: string; toUserId: string; amount: number },
+    ) => Promise<void>,
   ) {
     return this.prisma.$transaction(async (transaction) => {
       // La condition status: 'PENDING' empêche de traiter deux fois le même remboursement.
@@ -283,10 +297,14 @@ export class RepaymentsService {
         data: { updatedAt: new Date() },
       });
 
-      return transaction.repayment.findUniqueOrThrow({
+      const updated = await transaction.repayment.findUniqueOrThrow({
         where: { id: repaymentId },
         select: repaymentSelect,
       });
+
+      await afterUpdate?.(transaction, updated);
+
+      return updated;
     });
   }
 }
