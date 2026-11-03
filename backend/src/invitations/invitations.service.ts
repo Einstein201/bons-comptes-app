@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { notifyInvitationReceived } from '../notifications/notification-factory.js';
 import { decodeCursor, encodeCursor } from '../wallets/wallet-pagination.js';
 import type { CreateInvitationDto } from './dto/create-invitation.dto.js';
 import type { ListInvitationsQueryDto } from './dto/list-invitations-query.dto.js';
@@ -83,6 +84,13 @@ export class InvitationsService {
         await transaction.wallet.update({
           where: { id: walletId },
           data: { updatedAt: new Date() },
+        });
+
+        await notifyInvitationReceived(transaction, {
+          inviteeId: invitee.id,
+          inviterId: creatorId,
+          walletId,
+          walletTitle: invitation.wallet.title,
         });
 
         return invitation;

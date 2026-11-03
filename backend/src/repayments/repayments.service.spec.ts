@@ -17,6 +17,15 @@ describe('RepaymentsService confirm and cancel', () => {
   let transaction: {
     repayment: { updateMany: Mock; findUniqueOrThrow: Mock };
     wallet: { update: Mock };
+    user: { findMany: Mock };
+    notification: { createMany: Mock };
+  };
+
+  const confirmedRepayment = {
+    id: 'repayment-1',
+    fromUserId: 'debtor',
+    toUserId: 'recipient',
+    amount: 2000,
   };
 
   // debtor rembourse recipient ; creator a créé le porte-monnaie.
@@ -30,9 +39,16 @@ describe('RepaymentsService confirm and cancel', () => {
     transaction = {
       repayment: {
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-        findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 'repayment-1' }),
+        findUniqueOrThrow: vi.fn().mockResolvedValue(confirmedRepayment),
       },
       wallet: { update: vi.fn() },
+      user: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: 'debtor', name: 'Bob' },
+          { id: 'recipient', name: 'Alice' },
+        ]),
+      },
+      notification: { createMany: vi.fn() },
     };
     prisma = {
       $transaction: vi.fn(async (callback) => callback(transaction)),
@@ -58,7 +74,7 @@ describe('RepaymentsService confirm and cancel', () => {
     async (userId) => {
       await expect(
         repaymentsService.confirm('wallet-1', 'repayment-1', userId),
-      ).resolves.toEqual({ id: 'repayment-1' });
+      ).resolves.toEqual(confirmedRepayment);
 
       expect(transaction.repayment.updateMany).toHaveBeenCalledWith({
         where: { id: 'repayment-1', status: 'PENDING' },
@@ -95,6 +111,50 @@ describe('RepaymentsService confirm and cancel', () => {
       expect(transaction.repayment.updateMany).not.toHaveBeenCalled();
     },
   );
+
+  it('notifies the debtor only when the recipient confirms', async () => {
+    await repaymentsService.confirm('wallet-1', 'repayment-1', 'recipient');
+
+    expect(transaction.notification.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          userId: 'debtor',
+          type: 'REPAYMENT_CONFIRMED',
+          message: 'Votre remboursement de 20 € à Alice a été confirmé',
+          walletId: 'wallet-1',
+        },
+      ],
+    });
+  });
+
+  it('notifies both the debtor and the recipient when the creator confirms', async () => {
+    await repaymentsService.confirm('wallet-1', 'repayment-1', 'creator');
+
+    expect(transaction.notification.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({ userId: 'debtor' }),
+        expect.objectContaining({
+          userId: 'recipient',
+          message: 'Bob a réglé sa dette de 20 €',
+        }),
+      ],
+    });
+  });
+
+  it('does not notify anyone when a repayment is cancelled', async () => {
+    await repaymentsService.cancel('wallet-1', 'repayment-1', 'debtor');
+
+    expect(transaction.notification.createMany).not.toHaveBeenCalled();
+  });
+
+  it('does not notify when the repayment was already processed', async () => {
+    transaction.repayment.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      repaymentsService.confirm('wallet-1', 'repayment-1', 'recipient'),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(transaction.notification.createMany).not.toHaveBeenCalled();
+  });
 
   it('refreshes the wallet updatedAt in the same transaction', async () => {
     await repaymentsService.confirm('wallet-1', 'repayment-1', 'recipient');
