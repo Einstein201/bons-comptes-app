@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ApiError } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { BellIcon, WalletIcon } from './icons';
+import { WalletIcon } from './icons';
+import { NotificationBell } from './NotificationBell';
 import styles from './AppHeader.module.css';
 
 export function AppHeader() {
@@ -35,14 +36,12 @@ export function AppHeader() {
       </Link>
       <div className={styles.actions}>
         {status === 'authenticated' ? (
-          <Link href="/invitations" className={styles.iconButton} aria-label="Invitations reçues">
-            <BellIcon />
-          </Link>
-        ) : null}
-        {status === 'authenticated' ? (
-          <button type="button" className={styles.logout} onClick={handleLogout}>
-            Déconnexion
-          </button>
+          <>
+            <NotificationBell />
+            <button type="button" className={styles.logout} onClick={handleLogout}>
+              Déconnexion
+            </button>
+          </>
         ) : status === 'unauthenticated' || status === 'signed-out' ? (
           <Link className={styles.login} href="/login">Connexion</Link>
         ) : null}
