@@ -11,13 +11,25 @@ import {
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
 } from '../../wallets/wallet-pagination.js';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ListExpensesQueryDto {
+  @ApiPropertyOptional({
+    description: 'Curseur renvoyé par la page précédente (`nextCursor`).',
+    maxLength: 200,
+  })
   @IsOptional()
   @IsString()
   @MaxLength(200)
   cursor?: string;
 
+  @ApiPropertyOptional({
+    type: 'integer',
+    description: 'Nombre d’éléments par page.',
+    minimum: 1,
+    maximum: MAX_PAGE_LIMIT,
+    default: DEFAULT_PAGE_LIMIT,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
