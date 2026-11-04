@@ -6,9 +6,15 @@ import { AppModule } from './app.module.js';
 import { PrismaService } from './prisma/prisma.service.js';
 import { isSwaggerEnabled, setupSwagger } from './swagger.js';
 
+type Schema = {
+  required?: string[];
+  properties?: Record<string, Record<string, unknown>>;
+};
+type Parameter = { name: string; in: string; schema: Record<string, unknown> };
 type OpenApiDocument = {
   openapi: string;
-  paths: Record<string, Record<string, unknown>>;
+  paths: Record<string, Record<string, { parameters?: Parameter[] }>>;
+  components: { schemas: Record<string, Schema> };
 };
 
 // L'application complète, sans base de données : la documentation n'en a pas besoin.
@@ -85,6 +91,53 @@ describe('documentation Swagger', () => {
         'GET /health',
       ]),
     );
+  });
+
+  it('décrit les champs des corps de requête', async () => {
+    app = await createApp(true);
+    const { body } = await request(app.getHttpServer()).get('/api/docs-json');
+    const { schemas } = (body as OpenApiDocument).components;
+
+    expect(schemas.CreateExpenseDto.required).toEqual([
+      'title',
+      'amount',
+      'date',
+    ]);
+    expect(schemas.CreateExpenseDto.properties).toMatchObject({
+      title: { type: 'string', maxLength: 100 },
+      amount: { type: 'integer', minimum: 1, maximum: 2_147_483_647 },
+      date: { type: 'string', format: 'date' },
+      paidById: { type: 'string', format: 'uuid' },
+    });
+    expect(schemas.UpdateExpenseDto.required ?? []).toEqual([]);
+    expect(schemas.CreateUserDto.properties?.password).toMatchObject({
+      minLength: 8,
+      maxLength: 72,
+    });
+  });
+
+  it('décrit les paramètres de pagination et de filtre', async () => {
+    app = await createApp(true);
+    const { body } = await request(app.getHttpServer()).get('/api/docs-json');
+    const { paths } = body as OpenApiDocument;
+    const parameters =
+      paths['/wallets/{walletId}/repayments'].get.parameters ?? [];
+    const byName = Object.fromEntries(
+      parameters.map((item) => [item.name, item]),
+    );
+
+    expect(byName.walletId).toMatchObject({ in: 'path' });
+    expect(byName.limit).toMatchObject({
+      in: 'query',
+      schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+    });
+    expect(byName.cursor).toMatchObject({ in: 'query' });
+    expect(byName.status.schema).toEqual({
+      $ref: '#/components/schemas/RepaymentStatus',
+    });
+    expect(
+      (body as OpenApiDocument).components.schemas.RepaymentStatus,
+    ).toMatchObject({ enum: ['PENDING', 'PAID', 'CANCELLED'] });
   });
 
   it('n’expose rien quand la documentation est désactivée', async () => {
