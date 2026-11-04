@@ -82,6 +82,18 @@ The backend uses this secret to sign and verify JWTs.
 Limite connue : les refresh tokens ne sont pas stockés côté serveur. `POST /auth/refresh` émet un nouveau jeton mais l'ancien reste valide jusqu'à son expiration (7 jours), et `POST /auth/logout` ne fait qu'effacer le cookie. La révocation (`jti`) est prévue dans un billet de suivi.
 Do not commit `.env` or share the secret.
 
+## Documentation de l'API (Swagger)
+
+La documentation OpenAPI est générée à partir du code avec `@nestjs/swagger`.
+
+- Interface : `http://localhost:3000/api/docs`
+- Document JSON : `http://localhost:3000/api/docs-json`
+
+Elle n'est servie que si `SWAGGER_ENABLED=true` dans `backend/.env`, et jamais lorsque `NODE_ENV=production`.
+
+Pour appeler une route protégée depuis l'interface : exécuter `POST /auth/login`, copier l'`accessToken` reçu, cliquer sur **Authorize** et le coller dans le champ `bearer`.
+
+Pour documenter une nouvelle route : `@ApiOperation` pour le résumé, `@ApiOkResponse` ou `@ApiCreatedResponse` pour la réponse, `@ApiErrors` (`src/common/swagger/api-docs.decorators.ts`) pour les erreurs, et `@ApiProperty` sur chaque champ des DTO. `src/swagger.spec.ts` vérifie que chaque route a un résumé, une réponse documentée et la bonne authentification.
 
 ## API utilisateurs
 
