@@ -11,9 +11,13 @@ import {
 import type { AuthenticatedRequest } from '../auth/authenticated-request.js';
 import { JwtAuthGuard } from '../auth/guards/auth.guard.js';
 import { ClosureService } from './closure.service.js';
+import { ApiTags } from '@nestjs/swagger';
+import { ApiJwtAuth } from '../common/swagger/api-docs.decorators.js';
 
 @Controller('wallets/:id')
+@ApiTags('closure')
 @UseGuards(JwtAuthGuard)
+@ApiJwtAuth()
 export class ClosureController {
   constructor(private readonly closureService: ClosureService) {}
 

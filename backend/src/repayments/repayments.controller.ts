@@ -15,9 +15,13 @@ import { JwtAuthGuard } from '../auth/guards/auth.guard.js';
 import { CreateRepaymentDto } from './dto/create-repayment.dto.js';
 import { ListRepaymentsQueryDto } from './dto/list-repayments-query.dto.js';
 import { RepaymentsService } from './repayments.service.js';
+import { ApiTags } from '@nestjs/swagger';
+import { ApiJwtAuth } from '../common/swagger/api-docs.decorators.js';
 
 @Controller('wallets/:walletId/repayments')
+@ApiTags('repayments')
 @UseGuards(JwtAuthGuard)
+@ApiJwtAuth()
 export class RepaymentsController {
   constructor(private readonly repaymentsService: RepaymentsService) {}
 

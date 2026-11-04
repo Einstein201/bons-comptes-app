@@ -14,9 +14,13 @@ import { CreateWalletDto } from './dto/create-wallet.dto.js';
 import { GetWalletQueryDto } from './dto/get-wallet-query.dto.js';
 import { ListWalletsQueryDto } from './dto/list-wallets-query.dto.js';
 import { WalletsService } from './wallets.service.js';
+import { ApiTags } from '@nestjs/swagger';
+import { ApiJwtAuth } from '../common/swagger/api-docs.decorators.js';
 
 @Controller('wallets')
+@ApiTags('wallets')
 @UseGuards(JwtAuthGuard)
+@ApiJwtAuth()
 export class WalletsController {
   constructor(private readonly walletsService: WalletsService) {}
 

@@ -11,11 +11,34 @@ type Schema = {
   properties?: Record<string, Record<string, unknown>>;
 };
 type Parameter = { name: string; in: string; schema: Record<string, unknown> };
+type Operation = {
+  tags?: string[];
+  security?: Record<string, string[]>[];
+  parameters?: Parameter[];
+  responses: Record<string, { description: string; content?: unknown }>;
+};
 type OpenApiDocument = {
   openapi: string;
-  paths: Record<string, Record<string, { parameters?: Parameter[] }>>;
+  paths: Record<string, Record<string, Operation>>;
   components: { schemas: Record<string, Schema> };
 };
+
+const PUBLIC_ROUTES = [
+  'POST /auth/login',
+  'POST /auth/refresh',
+  'POST /auth/logout',
+  'POST /users',
+  'GET /health',
+];
+
+function operationsOf(document: OpenApiDocument) {
+  return Object.entries(document.paths).flatMap(([path, methods]) =>
+    Object.entries(methods).map(([method, operation]) => ({
+      route: `${method.toUpperCase()} ${path}`,
+      operation,
+    })),
+  );
+}
 
 // L'application complète, sans base de données : la documentation n'en a pas besoin.
 async function createApp(withSwagger: boolean) {
@@ -138,6 +161,47 @@ describe('documentation Swagger', () => {
     expect(
       (body as OpenApiDocument).components.schemas.RepaymentStatus,
     ).toMatchObject({ enum: ['PENDING', 'PAID', 'CANCELLED'] });
+  });
+
+  it('range chaque route dans un tag', async () => {
+    app = await createApp(true);
+    const { body } = await request(app.getHttpServer()).get('/api/docs-json');
+    const tags = new Set(
+      operationsOf(body as OpenApiDocument).flatMap(
+        ({ operation }) => operation.tags ?? [],
+      ),
+    );
+
+    expect([...tags].sort()).toEqual([
+      'auth',
+      'closure',
+      'expenses',
+      'health',
+      'invitations',
+      'members',
+      'notifications',
+      'repayments',
+      'users',
+      'wallets',
+    ]);
+    for (const { route, operation } of operationsOf(body as OpenApiDocument)) {
+      expect(operation.tags, route).toHaveLength(1);
+    }
+  });
+
+  it('exige le jeton Bearer sur les routes protégées uniquement', async () => {
+    app = await createApp(true);
+    const { body } = await request(app.getHttpServer()).get('/api/docs-json');
+
+    for (const { route, operation } of operationsOf(body as OpenApiDocument)) {
+      const bearer = (operation.security ?? []).some(
+        (item) => 'bearer' in item,
+      );
+      expect(bearer, route).toBe(!PUBLIC_ROUTES.includes(route));
+      if (bearer) expect(operation.responses['401'], route).toBeDefined();
+    }
+    const refresh = (body as OpenApiDocument).paths['/auth/refresh'].post;
+    expect(refresh.security).toEqual([{ cookie: [] }]);
   });
 
   it('n’expose rien quand la documentation est désactivée', async () => {

@@ -16,9 +16,13 @@ import { JwtAuthGuard } from '../auth/guards/auth.guard.js';
 import { CreateInvitationDto } from './dto/create-invitation.dto.js';
 import { ListInvitationsQueryDto } from './dto/list-invitations-query.dto.js';
 import { InvitationsService } from './invitations.service.js';
+import { ApiTags } from '@nestjs/swagger';
+import { ApiJwtAuth } from '../common/swagger/api-docs.decorators.js';
 
 @Controller()
+@ApiTags('invitations')
 @UseGuards(JwtAuthGuard)
+@ApiJwtAuth()
 export class InvitationsController {
   constructor(private readonly invitationsService: InvitationsService) {}
 
