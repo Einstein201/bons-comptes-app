@@ -12,6 +12,7 @@ type Schema = {
 };
 type Parameter = { name: string; in: string; schema: Record<string, unknown> };
 type Operation = {
+  summary?: string;
   tags?: string[];
   security?: Record<string, string[]>[];
   parameters?: Parameter[];
@@ -202,6 +203,59 @@ describe('documentation Swagger', () => {
     }
     const refresh = (body as OpenApiDocument).paths['/auth/refresh'].post;
     expect(refresh.security).toEqual([{ cookie: [] }]);
+  });
+
+  it('résume chaque route et décrit sa réponse en cas de succès', async () => {
+    app = await createApp(true);
+    const { body } = await request(app.getHttpServer()).get('/api/docs-json');
+
+    for (const { route, operation } of operationsOf(body as OpenApiDocument)) {
+      expect(operation.summary, route).toBeTruthy();
+      const success = Object.keys(operation.responses).filter((code) =>
+        code.startsWith('2'),
+      );
+      expect(success, route).toHaveLength(1);
+      if (success[0] !== '204') {
+        expect(operation.responses[success[0]].content, route).toBeDefined();
+      }
+    }
+  });
+
+  it('décrit les réponses et les erreurs de la modification d’une dépense', async () => {
+    app = await createApp(true);
+    const { body } = await request(app.getHttpServer()).get('/api/docs-json');
+    const document = body as OpenApiDocument;
+    const update = document.paths['/wallets/{walletId}/expenses/{id}'].patch;
+
+    expect(Object.keys(update.responses).sort()).toEqual([
+      '200',
+      '400',
+      '401',
+      '403',
+      '404',
+      '409',
+    ]);
+    expect(JSON.stringify(update.responses['200'].content)).toContain(
+      '#/components/schemas/ExpenseResponseDto',
+    );
+    expect(JSON.stringify(update.responses['409'].content)).toContain(
+      '#/components/schemas/ErrorResponseDto',
+    );
+    expect(update.responses['403'].content).toMatchObject({
+      'application/json': {
+        example: {
+          statusCode: 403,
+          message: 'Seul le payeur peut modifier cette dépense.',
+          error: 'Forbidden',
+        },
+      },
+    });
+    expect(document.components.schemas.ExpensePageDto.properties).toMatchObject(
+      {
+        totalAmount: { type: 'integer' },
+        nextCursor: { type: 'string', nullable: true },
+      },
+    );
   });
 
   it('n’expose rien quand la documentation est désactivée', async () => {
