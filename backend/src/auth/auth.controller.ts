@@ -16,8 +16,11 @@ import { JwtAuthGuard } from './guards/auth.guard.js';
 import { REFRESH_COOKIE } from './auth.constants.js';
 import { ChangePasswordDto } from './dto/change-password.dto.js';
 import { LoginDto } from './dto/login.dto.js';
+import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
+import { ApiJwtAuth } from '../common/swagger/api-docs.decorators.js';
 
 @Controller('auth')
+@ApiTags('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
@@ -33,6 +36,7 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @ApiCookieAuth()
   @HttpCode(200)
   async refresh(
     @Req() req: Request,
@@ -46,12 +50,14 @@ export class AuthController {
   }
 
   @Post('logout')
+  @ApiCookieAuth()
   @HttpCode(200)
   logout(@Res({ passthrough: true }) res: Response) {
     return this.authService.logout(res);
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiJwtAuth()
   @Post('change-password')
   @HttpCode(200)
   async changePassword(
@@ -66,6 +72,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiJwtAuth()
   @Get('me')
   me(@Req() req: Request & { user: { userId: string } }) {
     return this.authService.me(req.user.userId);

@@ -18,9 +18,13 @@ import { CreateExpenseDto } from './dto/create-expense.dto.js';
 import { ListExpensesQueryDto } from './dto/list-expenses-query.dto.js';
 import { UpdateExpenseDto } from './dto/update-expense.dto.js';
 import { ExpensesService } from './expenses.service.js';
+import { ApiTags } from '@nestjs/swagger';
+import { ApiJwtAuth } from '../common/swagger/api-docs.decorators.js';
 
 @Controller('wallets/:walletId/expenses')
+@ApiTags('expenses')
 @UseGuards(JwtAuthGuard)
+@ApiJwtAuth()
 export class ExpensesController {
   constructor(private readonly expensesService: ExpensesService) {}
 

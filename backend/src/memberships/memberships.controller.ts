@@ -10,9 +10,13 @@ import {
 import type { AuthenticatedRequest } from '../auth/authenticated-request.js';
 import { JwtAuthGuard } from '../auth/guards/auth.guard.js';
 import { MembershipsService } from './memberships.service.js';
+import { ApiTags } from '@nestjs/swagger';
+import { ApiJwtAuth } from '../common/swagger/api-docs.decorators.js';
 
 @Controller('wallets/:walletId/members')
+@ApiTags('members')
 @UseGuards(JwtAuthGuard)
+@ApiJwtAuth()
 export class MembershipsController {
   constructor(private readonly membershipsService: MembershipsService) {}
 

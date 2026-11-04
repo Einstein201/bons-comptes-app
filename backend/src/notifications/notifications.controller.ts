@@ -13,9 +13,13 @@ import type { AuthenticatedRequest } from '../auth/authenticated-request.js';
 import { JwtAuthGuard } from '../auth/guards/auth.guard.js';
 import { ListNotificationsQueryDto } from './dto/list-notifications-query.dto.js';
 import { NotificationsService } from './notifications.service.js';
+import { ApiTags } from '@nestjs/swagger';
+import { ApiJwtAuth } from '../common/swagger/api-docs.decorators.js';
 
 @Controller('notifications')
+@ApiTags('notifications')
 @UseGuards(JwtAuthGuard)
+@ApiJwtAuth()
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 

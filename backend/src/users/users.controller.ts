@@ -4,8 +4,11 @@ import { JwtAuthGuard } from '../auth/guards/auth.guard.js';
 import { CreateUserDto } from './dto/create-user.dto.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import { UsersService } from './users.service.js';
+import { ApiTags } from '@nestjs/swagger';
+import { ApiJwtAuth } from '../common/swagger/api-docs.decorators.js';
 
 @Controller('users')
+@ApiTags('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
@@ -15,6 +18,7 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiJwtAuth()
   @Patch('me')
   updateProfile(
     @Body() updateProfileDto: UpdateProfileDto,
