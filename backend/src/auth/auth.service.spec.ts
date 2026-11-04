@@ -280,18 +280,20 @@ describe('AuthService', () => {
   it('renvoie le nom actuel de l’utilisateur sans données sensibles', async () => {
     prismaMock.user.findUnique.mockResolvedValue({
       id: 'user-1',
+      email: 'alice@example.com',
       name: 'Alice mise à jour',
       password: 'secret-hash',
     });
 
     await expect(service.me('user-1')).resolves.toEqual({
       userId: 'user-1',
+      email: 'alice@example.com',
       name: 'Alice mise à jour',
     });
 
     expect(prismaMock.user.findUnique).toHaveBeenCalledWith({
       where: { id: 'user-1' },
-      select: { id: true, name: true },
+      select: { id: true, email: true, name: true },
     });
   });
 
