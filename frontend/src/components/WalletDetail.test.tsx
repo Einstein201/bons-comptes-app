@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
     listExpenses: vi.fn(),
     deleteExpense: vi.fn(),
     createExpense: vi.fn(),
+    updateExpense: vi.fn(),
     sendInvitation: vi.fn(),
 }));
 
@@ -24,6 +25,7 @@ vi.mock('../services/expenses', () => ({
     listExpenses: mocks.listExpenses,
     deleteExpense: mocks.deleteExpense,
     createExpense: mocks.createExpense,
+    updateExpense: mocks.updateExpense,
 }));
 
 // Intl utilise des espaces insécables : on les remplace pour comparer facilement.
@@ -235,6 +237,103 @@ describe('détail d’un porte-monnaie', () => {
         render(<WalletDetail walletId="wallet-1" />);
 
         expect((await screen.findByRole('alert')).textContent).toContain(message);
+    });
+
+    it('ne propose la modification que pour les dépenses payées par l’utilisateur', async () => {
+        mocks.listExpenses.mockResolvedValue({
+            items: [expense('e-2', '2025-06-21', 100, 'me', 'À moi'), expense('e-1', '2025-06-18', 100, 'chloe', 'À Chloé')],
+            nextCursor: null,
+            totalAmount: 200,
+        });
+
+        render(<WalletDetail walletId="wallet-1" />);
+        await screen.findByText('À moi');
+
+        expect(screen.getByRole('button', { name: 'Modifier la dépense « À moi »' })).toBeTruthy();
+        expect(screen.queryByRole('button', { name: 'Modifier la dépense « À Chloé »' })).toBeNull();
+    });
+
+    it('ne propose pas la modification sur un porte-monnaie clôturé', async () => {
+        givenWallet('CLOSED');
+        mocks.listExpenses.mockResolvedValue({
+            items: [expense('e-1', '2025-06-21', 100, 'me', 'Courses')],
+            nextCursor: null,
+            totalAmount: 100,
+        });
+
+        render(<WalletDetail walletId="wallet-1" />);
+        await screen.findByText('Courses');
+
+        expect(screen.queryByRole('button', { name: /Modifier la dépense/ })).toBeNull();
+    });
+
+    it('modifie une dépense : la liste et le total sont mis à jour', async () => {
+        mocks.listExpenses.mockResolvedValue({
+            items: [
+                expense('e-2', '2025-06-21', 3800, 'me', 'Billets de train'),
+                expense('e-1', '2025-06-18', 1200, 'chloe', 'Courses'),
+            ],
+            nextCursor: null,
+            totalAmount: 5000,
+        });
+        mocks.updateExpense.mockResolvedValue(expense('e-2', '2025-06-21', 4500, 'me', 'TGV'));
+
+        render(<WalletDetail walletId="wallet-1" />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Modifier la dépense « Billets de train »' }));
+
+        const dialog = screen.getByRole('dialog');
+        expect((within(dialog).getByLabelText('Montant (€)') as HTMLInputElement).value).toBe('38,00');
+        fireEvent.change(within(dialog).getByLabelText(/Description/), { target: { value: 'TGV' } });
+        fireEvent.change(within(dialog).getByLabelText('Montant (€)'), { target: { value: '45' } });
+        fireEvent.submit(dialog);
+
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+        expect(mocks.updateExpense).toHaveBeenCalledWith('wallet-1', 'e-2', { title: 'TGV', amount: 4500 });
+        expect(titles()).toEqual(['TGV', 'Courses']);
+        expect(screen.getByRole('status').textContent).toContain('« TGV » a été modifiée');
+        // 50,00 € − 38,00 € + 45,00 € = 57,00 €
+        expect(plain(screen.getByText(/57,00/).textContent)).toBe('57,00 €');
+    });
+
+    it('affiche l’erreur 409 de répartition sans clôturer le porte-monnaie', async () => {
+        mocks.listExpenses.mockResolvedValue({
+            items: [expense('e-1', '2025-06-21', 3800, 'me', 'Billets de train')],
+            nextCursor: null,
+            totalAmount: 3800,
+        });
+        mocks.updateExpense.mockRejectedValue(
+            new ApiError(409, ['Le montant ne peut pas être modifié car la dépense possède déjà une répartition.']),
+        );
+
+        render(<WalletDetail walletId="wallet-1" />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Modifier la dépense « Billets de train »' }));
+        const dialog = screen.getByRole('dialog');
+        fireEvent.change(within(dialog).getByLabelText('Montant (€)'), { target: { value: '45' } });
+        fireEvent.submit(dialog);
+
+        expect((await within(dialog).findByRole('alert')).textContent).toContain('a déjà une répartition');
+        expect(screen.getByRole('button', { name: /Ajouter une dépense/ })).toBeTruthy();
+        // Montant de la ligne et total : inchangés.
+        expect(screen.getAllByText(/38,00/)).toHaveLength(2);
+    });
+
+    it('bascule en lecture seule si la modification est refusée car le porte-monnaie est clôturé', async () => {
+        mocks.listExpenses.mockResolvedValue({
+            items: [expense('e-1', '2025-06-21', 3800, 'me', 'Billets de train')],
+            nextCursor: null,
+            totalAmount: 3800,
+        });
+        mocks.updateExpense.mockRejectedValue(new ApiError(409, ['Ce porte-monnaie est fermé.']));
+
+        render(<WalletDetail walletId="wallet-1" />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Modifier la dépense « Billets de train »' }));
+        const dialog = screen.getByRole('dialog');
+        fireEvent.change(within(dialog).getByLabelText('Montant (€)'), { target: { value: '45' } });
+        fireEvent.submit(dialog);
+
+        expect((await screen.findByText(/vient d’être clôturé/)).textContent).toBeTruthy();
+        expect(screen.queryByRole('dialog')).toBeNull();
+        expect(screen.queryByRole('button', { name: /Modifier la dépense/ })).toBeNull();
     });
 
     it('garde le bouton de pagination quand toutes les dépenses affichées sont supprimées', async () => {
