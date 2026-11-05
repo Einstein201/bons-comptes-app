@@ -1,10 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ApiError } from '../services/api';
 import { deleteExpense, listExpenses, type Expense } from '../services/expenses';
+import { leaveWallet, removeMember } from '../services/memberships';
 import { getWalletDetails, type WalletWithMembers, type WalletMember } from '../services/wallets';
 import { formatCents } from '../utils/money';
 import { Button } from './Button';
@@ -13,10 +15,14 @@ import { ExpenseList } from './ExpenseList';
 import { describeExpenseError, isClosedWalletError } from './expenseErrors';
 import { LockIcon, PlusIcon } from './icons';
 import { InviteMemberForm } from './InviteMemberForm';
+import { MemberActionDialog } from './MemberActionDialog';
+import { isMemberWalletClosedError } from './memberErrors';
 import { useWalletTab } from './WalletTabs';
 import styles from './WalletDetail.module.css';
 
 type Notice = { kind: 'success' | 'error'; message: string };
+
+type MemberDialog = { action: 'leave' } | { action: 'remove'; member: WalletMember };
 
 // Même ordre que le backend : date la plus récente d'abord, puis identifiant décroissant.
 function compareExpenses(a: Expense, b: Expense): number {
@@ -50,6 +56,7 @@ export function WalletDetail({ walletId }: { walletId: string }) {
 
 function WalletDetailContent({ walletId }: { walletId: string }) {
     const { user } = useAuth();
+    const router = useRouter();
     const currentUserId = user?.userId;
     const tab = useWalletTab();
     const showExpenses = tab === 'all' || tab === 'expenses';
@@ -65,6 +72,8 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
     const [deletingId, setDeletingId] = useState<string>();
     const [formOpen, setFormOpen] = useState(false);
     const [notice, setNotice] = useState<Notice>();
+    const [memberDialog, setMemberDialog] = useState<MemberDialog>();
+    const [memberNotice, setMemberNotice] = useState<Notice>();
     // Augmente à chaque ajout ou suppression réussi.
     const mutationCount = useRef(0);
 
@@ -95,6 +104,12 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
 
     const isOpen = wallet?.status === 'OPEN';
     const acceptedMembers = members.filter((member) => member.status === 'MEMBER');
+    // Le serveur applique les mêmes règles (403 / 409) ; les boutons ne sont qu'une aide.
+    const canRemoveMembers = isOpen && wallet?.isCreator === true;
+    const canLeave =
+        isOpen &&
+        wallet?.isCreator === false &&
+        acceptedMembers.some((member) => member.userId === currentUserId);
 
     async function refreshMembers() {
         const details = await getWalletDetails(walletId);
@@ -109,6 +124,36 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
             kind: 'error',
             message: 'Ce porte-monnaie vient d’être clôturé : l’opération a été refusée.',
         });
+    }
+
+    async function confirmMemberAction(dialog: MemberDialog) {
+        try {
+            if (dialog.action === 'leave') {
+                await leaveWallet(walletId);
+                // Le porte-monnaie disparaît de la liste du tableau de bord, rechargée à l'arrivée.
+                router.push('/');
+                return;
+            }
+            await removeMember(walletId, dialog.member.userId);
+            setMembers((current) => current.filter((item) => item.userId !== dialog.member.userId));
+            setMemberNotice({ kind: 'success', message: `${dialog.member.name} a été retiré(e) du porte-monnaie.` });
+            setMemberDialog(undefined);
+        } catch (error) {
+            if (isMemberWalletClosedError(error)) {
+                setWallet((current) => (current ? { ...current, status: 'CLOSED' } : current));
+                setMemberDialog(undefined);
+                setMemberNotice({
+                    kind: 'error',
+                    message: 'Ce porte-monnaie vient d’être clôturé : l’opération a été refusée.',
+                });
+                return;
+            }
+            // 404 : le membre est déjà parti, la liste est obsolète.
+            if (error instanceof ApiError && error.status === 404 && dialog.action === 'remove') {
+                void refreshMembers().catch(() => undefined);
+            }
+            throw error;
+        }
     }
 
     async function handleLoadMore() {
@@ -223,16 +268,55 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
                     {members.map((member) => (
                         <li key={member.userId} className={styles.memberItem}>
                             <span>{member.name}</span>
-                            <span className={styles.memberStatus}>
-                                {member.status === 'MEMBER' ? 'Membre' : 'Invitation en attente'}
+                            <span className={styles.memberRight}>
+                                <span className={styles.memberStatus}>
+                                    {member.status === 'MEMBER' ? 'Membre' : 'Invitation en attente'}
+                                </span>
+                                {canRemoveMembers && member.status === 'MEMBER' && member.userId !== currentUserId ? (
+                                    <Button
+                                        variant="ghost"
+                                        className={styles.memberAction}
+                                        aria-label={`Retirer ${member.name}`}
+                                        onClick={() => { setMemberNotice(undefined); setMemberDialog({ action: 'remove', member }); }}
+                                    >
+                                        Retirer
+                                    </Button>
+                                ) : null}
                             </span>
                         </li>
                     ))}
                 </ul>
+                {memberNotice ? (
+                    <p
+                        className={memberNotice.kind === 'success' ? styles.success : styles.alert}
+                        role={memberNotice.kind === 'success' ? 'status' : 'alert'}
+                    >
+                        {memberNotice.message}
+                    </p>
+                ) : null}
+                {canLeave ? (
+                    <Button
+                        variant="secondary"
+                        className={styles.leaveButton}
+                        onClick={() => { setMemberNotice(undefined); setMemberDialog({ action: 'leave' }); }}
+                    >
+                        Quitter le porte-monnaie
+                    </Button>
+                ) : null}
                 {wallet.isCreator && isOpen ? (
                     <InviteMemberForm walletId={walletId} onInvited={refreshMembers} />
                 ) : null}
             </section>
+            ) : null}
+
+            {memberDialog && isOpen ? (
+                <MemberActionDialog
+                    action={memberDialog.action}
+                    memberName={memberDialog.action === 'remove' ? memberDialog.member.name : undefined}
+                    walletTitle={wallet.title}
+                    onConfirm={() => confirmMemberAction(memberDialog)}
+                    onClose={() => setMemberDialog(undefined)}
+                />
             ) : null}
 
             {showExpenses ? (
