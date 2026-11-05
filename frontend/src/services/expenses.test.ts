@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setAccessToken } from './api';
-import { createExpense, deleteExpense, listExpenses } from './expenses';
+import { createExpense, deleteExpense, listExpenses, updateExpense } from './expenses';
 import { getWalletDetails } from './wallets';
 
 const fetchMock = vi.fn<typeof fetch>();
@@ -60,6 +60,33 @@ describe('service des dépenses', () => {
         expect(new Headers(options?.headers).get('Content-Type')).toBe('application/json');
         expect(JSON.parse(options?.body as string)).toEqual({
             title: 'Courses', amount: 4599, date: '2026-10-25', paidById: 'user-2',
+        });
+    });
+
+    it('modifie une dépense avec un PATCH limité aux champs fournis', async () => {
+        fetchMock.mockResolvedValue(json({ id: 'e-1', title: 'Courses', amount: 5000 }));
+
+        await expect(updateExpense('wallet-1', 'e-1', { amount: 5000 })).resolves.toMatchObject({
+            amount: 5000,
+        });
+
+        const [url, options] = fetchMock.mock.calls[0];
+        expect(url.toString()).toBe('http://localhost:3000/wallets/wallet-1/expenses/e-1');
+        expect(options?.method).toBe('PATCH');
+        expect(new Headers(options?.headers).get('Content-Type')).toBe('application/json');
+        expect(JSON.parse(options?.body as string)).toEqual({ amount: 5000 });
+    });
+
+    it('encode les identifiants dans le chemin de modification', async () => {
+        fetchMock.mockResolvedValue(json({ id: 'e/1' }));
+        await updateExpense('w/1', 'e/1', { title: 'Courses' });
+        expect(calledUrl()).toBe('http://localhost:3000/wallets/w%2F1/expenses/e%2F1');
+    });
+
+    it.each([400, 403, 404, 409])('propage une erreur HTTP %i à la modification', async (status) => {
+        fetchMock.mockResolvedValue(json({ message: 'Refusé' }, status));
+        await expect(updateExpense('wallet-1', 'e-1', { title: 'x' })).rejects.toMatchObject({
+            status, messages: ['Refusé'],
         });
     });
 
