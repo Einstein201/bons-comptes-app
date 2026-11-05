@@ -107,6 +107,7 @@
     white-space: nowrap;
 }
 
+.edit,
 .delete {
     display: grid;
     flex: none;
@@ -122,9 +123,14 @@
     cursor: pointer;
 }
 
-.deleteSlot {
+.actionsSlot {
     flex: none;
-    width: 36px;
+    width: 88px;
+}
+
+.edit:hover:not(:disabled) {
+    background: var(--color-primary-tint);
+    color: var(--color-primary);
 }
 
 .delete:hover:not(:disabled) {
@@ -132,6 +138,7 @@
     color: var(--color-error);
 }
 
+.edit:focus-visible,
 .delete:focus-visible {
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;

@@ -5,7 +5,7 @@ import type { Expense } from '../services/expenses';
 import { dayOfMonth, monthLabel, shortWeekday } from '../utils/dates';
 import { formatCents } from '../utils/money';
 import { Button } from './Button';
-import { ReceiptIcon, TrashIcon } from './icons';
+import { PencilIcon, ReceiptIcon, TrashIcon } from './icons';
 import styles from './ExpenseList.module.css';
 
 type ExpenseListProps = {
@@ -13,6 +13,7 @@ type ExpenseListProps = {
     currentUserId: string | undefined;
     canEdit: boolean;
     deletingId: string | undefined;
+    onEdit: (expense: Expense) => void;
     onDelete: (expense: Expense) => void;
     hasMore: boolean;
     loadingMore: boolean;
@@ -41,6 +42,7 @@ export function ExpenseList({
                                 currentUserId,
                                 canEdit,
                                 deletingId,
+                                onEdit,
                                 onDelete,
                                 hasMore,
                                 loadingMore,
@@ -85,7 +87,19 @@ export function ExpenseList({
                                     <p className={styles.amount}>{formatCents(expense.amount)}</p>
 
                                     {/* Garde les montants alignés quand il n'y a pas de bouton. */}
-                                    {canEdit && !paidByMe ? <span className={styles.deleteSlot} /> : null}
+                                    {canEdit && !paidByMe ? <span className={styles.actionsSlot} /> : null}
+
+                                    {canDelete && confirmingId !== expense.id ? (
+                                        <button
+                                            type="button"
+                                            className={styles.edit}
+                                            aria-label={`Modifier la dépense « ${expense.title} »`}
+                                            onClick={() => onEdit(expense)}
+                                            disabled={deleting}
+                                        >
+                                            <PencilIcon />
+                                        </button>
+                                    ) : null}
 
                                     {canDelete && confirmingId !== expense.id ? (
                                         <button

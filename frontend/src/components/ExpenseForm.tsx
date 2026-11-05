@@ -2,9 +2,9 @@
 
 import { useId, useState, type FormEvent } from 'react';
 import { ApiError } from '../services/api';
-import { createExpense, type Expense } from '../services/expenses';
+import { createExpense, updateExpense, type Expense } from '../services/expenses';
 import { todayIsoDate } from '../utils/dates';
-import { parseAmountToCents } from '../utils/money';
+import { formatCentsForInput, parseAmountToCents } from '../utils/money';
 import { Button } from './Button';
 import { Field } from './Field';
 import { CloseIcon } from './icons';
@@ -20,11 +20,14 @@ type ExpenseFormProps = {
     walletId: string;
     payers: Payer[];
     currentUserId: string | undefined;
-    onCreated: (expense: Expense) => void;
     onClose: () => void;
     // 409 : le porte-monnaie a été clôturé entre-temps.
     onWalletClosed: () => void;
-};
+} & (
+    | { expense?: undefined; onCreated: (expense: Expense) => void }
+    // Modification : champs préremplis, seuls le titre et le montant sont modifiables.
+    | { expense: Expense; onUpdated: (expense: Expense, previous: Expense) => void }
+);
 
 type FieldErrors = { title?: string; amount?: string; date?: string };
 
@@ -42,19 +45,15 @@ function validate(title: string, amount: string, date: string): FieldErrors {
     return errors;
 }
 
-export function ExpenseForm({
-                                walletId,
-                                payers,
-                                currentUserId,
-                                onCreated,
-                                onClose,
-                                onWalletClosed,
-                            }: ExpenseFormProps) {
+export function ExpenseForm(props: ExpenseFormProps) {
+    const { walletId, payers, currentUserId, onClose, onWalletClosed, expense: editing } = props;
     const titleId = useId();
-    const [title, setTitle] = useState('');
-    const [amount, setAmount] = useState('');
-    const [date, setDate] = useState(() => todayIsoDate());
-    const [paidById, setPaidById] = useState(currentUserId ?? payers[0]?.userId ?? '');
+    const [title, setTitle] = useState(editing?.title ?? '');
+    const [amount, setAmount] = useState(editing ? formatCentsForInput(editing.amount) : '');
+    const [date, setDate] = useState(() => editing?.date.slice(0, 10) ?? todayIsoDate());
+    const [paidById, setPaidById] = useState(
+        editing?.paidBy.id ?? currentUserId ?? payers[0]?.userId ?? '',
+    );
     const [errors, setErrors] = useState<FieldErrors>({});
     const [failure, setFailure] = useState<string>();
     const [submitting, setSubmitting] = useState(false);
@@ -70,13 +69,30 @@ export function ExpenseForm({
 
         setSubmitting(true);
         try {
+            if (props.expense) {
+                const previous = props.expense;
+                const input = {
+                    title: title.trim(),
+                    amount: parseAmountToCents(amount)!,
+                };
+                // Rien n'a changé : le serveur refuserait une requête sans champ à modifier.
+                if (input.title === previous.title && input.amount === previous.amount) {
+                    onClose();
+                    return;
+                }
+                props.onUpdated(await updateExpense(walletId, previous.id, {
+                    ...(input.title !== previous.title ? { title: input.title } : {}),
+                    ...(input.amount !== previous.amount ? { amount: input.amount } : {}),
+                }), previous);
+                return;
+            }
             const expense = await createExpense(walletId, {
                 title: title.trim(),
                 amount: parseAmountToCents(amount)!,
                 date,
                 paidById,
             });
-            onCreated(expense);
+            props.onCreated(expense);
         } catch (error) {
             if (!(error instanceof ApiError) && !(error instanceof TypeError)) {
                 console.error(error);
@@ -85,7 +101,7 @@ export function ExpenseForm({
                 onWalletClosed();
                 return;
             }
-            setFailure(describeExpenseError(error, 'create'));
+            setFailure(describeExpenseError(error, editing ? 'update' : 'create'));
         } finally {
             setSubmitting(false);
         }
@@ -103,7 +119,9 @@ export function ExpenseForm({
                 aria-busy={submitting}
             >
                 <header className={styles.header}>
-                    <h2 id={titleId} className={styles.heading}>Ajouter une dépense</h2>
+                    <h2 id={titleId} className={styles.heading}>
+                        {editing ? 'Modifier la dépense' : 'Ajouter une dépense'}
+                    </h2>
                     <button
                         type="button"
                         className={styles.close}
@@ -166,11 +184,17 @@ export function ExpenseForm({
                                     value={date}
                                     onChange={(event) => setDate(event.target.value)}
                                     aria-required="true"
-                                    readOnly={submitting}
+                                    readOnly={submitting || editing !== undefined}
                                 />
                             )}
                         </Field>
                     </div>
+
+                    {editing ? (
+                        <p className={styles.note}>
+                            La date et le payeur ne peuvent pas être modifiés.
+                        </p>
+                    ) : null}
 
                     <Field label="Payé par">
                         {(control) => (
@@ -179,7 +203,7 @@ export function ExpenseForm({
                                 name="paidById"
                                 value={paidById}
                                 onChange={(event) => setPaidById(event.target.value)}
-                                disabled={submitting}
+                                disabled={submitting || editing !== undefined}
                             >
                                 {payers.map((payer) => (
                                     <option key={payer.userId} value={payer.userId}>
