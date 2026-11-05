@@ -64,6 +64,7 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
     const [loadingMore, setLoadingMore] = useState(false);
     const [deletingId, setDeletingId] = useState<string>();
     const [formOpen, setFormOpen] = useState(false);
+    const [editingExpense, setEditingExpense] = useState<Expense>();
     const [notice, setNotice] = useState<Notice>();
     // Augmente à chaque ajout ou suppression réussi.
     const mutationCount = useRef(0);
@@ -105,6 +106,7 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
     function markWalletClosed() {
         setWallet((current) => (current ? { ...current, status: 'CLOSED' } : current));
         setFormOpen(false);
+        setEditingExpense(undefined);
         setNotice({
             kind: 'error',
             message: 'Ce porte-monnaie vient d’être clôturé : l’opération a été refusée.',
@@ -138,6 +140,14 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
         setExpenses((current) => mergeExpenses(current, [expense]));
         setTotalAmount((total) => total + expense.amount);
         setNotice({ kind: 'success', message: `La dépense « ${expense.title} » a été ajoutée.` });
+    }
+
+    function handleUpdated(expense: Expense, previous: Expense) {
+        mutationCount.current += 1;
+        setEditingExpense(undefined);
+        setExpenses((current) => mergeExpenses(current, [expense]));
+        setTotalAmount((total) => total - previous.amount + expense.amount);
+        setNotice({ kind: 'success', message: `La dépense « ${expense.title} » a été modifiée.` });
     }
 
     function removeFromList(expense: Expense) {
@@ -259,6 +269,7 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
                 currentUserId={currentUserId}
                 canEdit={isOpen}
                 deletingId={deletingId}
+                onEdit={(expense) => { setNotice(undefined); setEditingExpense(expense); }}
                 onDelete={handleDelete}
                 hasMore={nextCursor !== null}
                 loadingMore={loadingMore}
@@ -272,6 +283,19 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
                     currentUserId={currentUserId}
                     onCreated={handleCreated}
                     onClose={() => setFormOpen(false)}
+                    onWalletClosed={markWalletClosed}
+                />
+            ) : null}
+
+            {editingExpense && isOpen ? (
+                <ExpenseForm
+                    key={editingExpense.id}
+                    walletId={walletId}
+                    payers={acceptedMembers}
+                    currentUserId={currentUserId}
+                    expense={editingExpense}
+                    onUpdated={handleUpdated}
+                    onClose={() => setEditingExpense(undefined)}
                     onWalletClosed={markWalletClosed}
                 />
             ) : null}
