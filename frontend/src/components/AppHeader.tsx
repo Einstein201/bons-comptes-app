@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { ApiError } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { WalletIcon } from './icons';
@@ -15,6 +15,27 @@ export function AppHeader() {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+  const accountButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleMouseDown(event: MouseEvent) {
+      if (!accountMenuRef.current?.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, [menuOpen]);
+
+  function handleMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'Escape') {
+      event.stopPropagation();
+      setMenuOpen(false);
+      accountButtonRef.current?.focus();
+    }
+  }
 
   async function handleLogout() {
     let failed = false;
@@ -42,22 +63,26 @@ export function AppHeader() {
         {status === 'authenticated' && user ? (
           <>
             <NotificationBell />
-            <div className={styles.accountMenu}>
+            <div
+              className={styles.accountMenu}
+              ref={accountMenuRef}
+              onKeyDown={handleMenuKeyDown}
+            >
               <button
                 type="button"
+                ref={accountButtonRef}
                 className={styles.accountButton}
                 aria-expanded={menuOpen}
-                aria-haspopup="menu"
+                aria-haspopup="true"
                 onClick={() => setMenuOpen((open) => !open)}
               >
                 <span className={styles.avatar} aria-hidden="true">{user.name.charAt(0).toUpperCase() || '?'}</span>
                 <span>{user.name}</span>
               </button>
               {menuOpen ? (
-                <div className={styles.menu} role="menu">
+                <div className={styles.menu}>
                   <button
                     type="button"
-                    role="menuitem"
                     onClick={() => {
                       setMenuOpen(false);
                       setAccountOpen(true);

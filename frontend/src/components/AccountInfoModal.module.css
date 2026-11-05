@@ -87,3 +87,9 @@
   color: var(--color-danger, #b42318);
   font-size: 14px;
 }
+
+.status {
+  margin: -8px 0 16px;
+  color: var(--color-success, #16794c);
+  font-size: 14px;
+}

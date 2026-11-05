@@ -41,11 +41,13 @@ export function AccountInfoModal({
     confirmation: '',
   });
   const [error, setError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   function close() {
     if (submitting) return;
     setPasswords({ currentPassword: '', newPassword: '', confirmation: '' });
+    setStatusMessage(null);
     onClose();
   }
 
@@ -62,11 +64,13 @@ export function AccountInfoModal({
     }
 
     setError(null);
+    setStatusMessage(null);
     setSubmitting(true);
     try {
       await onNameChange(value);
       setNameInput(value);
       setView('summary');
+      setStatusMessage('Nom mis à jour.');
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -84,19 +88,28 @@ export function AccountInfoModal({
       setError('La confirmation du nouveau mot de passe est différente.');
       return;
     }
+    if (passwords.newPassword.length < 8) {
+      setError('Le nouveau mot de passe doit contenir au moins 8 caractères.');
+      return;
+    }
 
     const input = {
       currentPassword: passwords.currentPassword,
       newPassword: passwords.newPassword,
     };
-    setPasswords({ currentPassword: '', newPassword: '', confirmation: '' });
     setError(null);
+    setStatusMessage(null);
     setSubmitting(true);
     try {
       await changePassword(input);
+      setPasswords({ currentPassword: '', newPassword: '', confirmation: '' });
       setView('summary');
+      setStatusMessage('Mot de passe modifié.');
     } catch (caught) {
       setError(errorMessage(caught));
+      if (caught instanceof ApiError && caught.status === 400) {
+        setPasswords((current) => ({ ...current, currentPassword: '' }));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -120,7 +133,7 @@ export function AccountInfoModal({
             <div className={styles.rows}>
               <div className={styles.row}>
                 <div><span className={styles.label}>Nom</span><strong>{name}</strong></div>
-                <Button variant="ghost" onClick={() => { setError(null); setView('name'); }}>Modifier</Button>
+                <Button variant="ghost" onClick={() => { setError(null); setStatusMessage(null); setView('name'); }}>Modifier</Button>
               </div>
               <div className={styles.row}>
                 <div><span className={styles.label}>Email</span><strong>{email}</strong></div>
@@ -128,9 +141,10 @@ export function AccountInfoModal({
               </div>
               <div className={styles.row}>
                 <div><span className={styles.label}>Mot de passe</span><strong aria-label="Mot de passe masqué">••••••••</strong></div>
-                <Button variant="ghost" onClick={() => { setError(null); setView('password'); }}>Modifier</Button>
+                <Button variant="ghost" onClick={() => { setError(null); setStatusMessage(null); setView('password'); }}>Modifier</Button>
               </div>
             </div>
+            {statusMessage ? <p className={styles.status} role="status">{statusMessage}</p> : null}
             {error ? <p className={styles.error} role="alert">{error}</p> : null}
             <Button variant="secondary" onClick={close}>Fermer</Button>
           </>
@@ -146,7 +160,7 @@ export function AccountInfoModal({
           </form>
         ) : (
           <form onSubmit={submitPassword} className={styles.form}>
-            <Field label="Ancien mot de passe" error={error ?? undefined}>
+            <Field label="Ancien mot de passe">
               {(control) => <input {...control} data-autofocus type="password" autoComplete="current-password" value={passwords.currentPassword} onChange={(event) => setPasswords((current) => ({ ...current, currentPassword: event.target.value }))} />}
             </Field>
             <Field label="Nouveau mot de passe">
@@ -155,6 +169,7 @@ export function AccountInfoModal({
             <Field label="Confirmation">
               {(control) => <input {...control} type="password" autoComplete="new-password" value={passwords.confirmation} onChange={(event) => setPasswords((current) => ({ ...current, confirmation: event.target.value }))} />}
             </Field>
+            {error ? <p className={styles.error} role="alert">{error}</p> : null}
             <div className={styles.actions}>
               <Button variant="secondary" onClick={() => { setError(null); setView('summary'); }} disabled={submitting}>Annuler</Button>
               <Button type="submit" disabled={submitting}>{submitting ? 'Modification…' : 'Modifier le mot de passe'}</Button>
