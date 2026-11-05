@@ -150,3 +150,19 @@
     color: var(--color-text-muted);
     font-size: 14px;
 }
+
+.memberRight {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.memberAction {
+    height: 32px;
+    padding-inline: 12px;
+    font-size: 13px;
+}
+
+.leaveButton {
+    margin-top: 16px;
+}
