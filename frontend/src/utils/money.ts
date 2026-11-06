@@ -26,6 +26,11 @@ export function parseAmountToCents(input: string): number | null {
     return cents;
 }
 
+// Valeur de départ d'un champ de saisie : 4599 → « 45,99 », 3800 → « 38,00 ».
+export function formatCentsForInput(cents: number): string {
+    return (cents / 100).toFixed(2).replace('.', ',');
+}
+
 export function formatCents(cents: number): string {
     return euroFormatter.format(cents / 100);
 }
