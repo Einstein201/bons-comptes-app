@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../services/api';
 import type { Expense } from '../services/expenses';
 import { mergeExpenses, WalletDetail } from './WalletDetail';
-import { WalletTabProvider } from './WalletTabs';
+import { WalletClosedProvider, WalletTabProvider } from './WalletTabs';
 
 const mocks = vi.hoisted(() => ({
     getWalletDetails: vi.fn(),
@@ -525,18 +525,72 @@ describe('détail d’un porte-monnaie', () => {
             expect(mocks.push).not.toHaveBeenCalled();
         });
 
-        it('bascule en lecture seule si le porte-monnaie vient d’être clôturé (409)', async () => {
+        // Le statut est relu après un 409 : le texte de l'erreur n'est jamais interprété.
+        const closeBehindTheScenes = (isCreator: boolean) => {
+            mocks.getWalletDetails.mockResolvedValue({
+                wallet: { id: 'wallet-1', title: 'Voyage', description: null, status: 'CLOSED', createdAt: '', isCreator },
+                members: [member('me', 'Marie Dupont'), member('chloe', 'Chloé Martin')],
+            });
+        };
+
+        it('bascule en lecture seule si le statut relu après un 409 est CLOSED, quel que soit le message', async () => {
             withMembers(false);
-            mocks.leaveWallet.mockRejectedValue(new ApiError(409, ['Ce porte-monnaie est fermé.']));
+            mocks.leaveWallet.mockRejectedValue(new ApiError(409, ['Message sans rapport']));
             render(<WalletDetail walletId="wallet-1" />);
 
             fireEvent.click(await screen.findByRole('button', { name: 'Quitter le porte-monnaie' }));
+            closeBehindTheScenes(false);
             confirm('Quitter le porte-monnaie');
 
             expect((await screen.findByText(/vient d’être clôturé/)).textContent).toBeTruthy();
             expect(screen.queryByRole('dialog')).toBeNull();
             expect(leaveButton()).toBeNull();
             expect(mocks.push).not.toHaveBeenCalled();
+        });
+
+        it('garde la modale ouverte si le porte-monnaie est resté ouvert, même si le message parle de clôture', async () => {
+            withMembers(true);
+            mocks.removeMember.mockRejectedValue(new ApiError(409, ['Ce porte-monnaie est fermé.']));
+            render(<WalletDetail walletId="wallet-1" />);
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Retirer Chloé Martin' }));
+            confirm('Retirer le membre');
+
+            const dialog = screen.getByRole('dialog');
+            expect((await within(dialog).findByRole('alert')).textContent).toContain('Ce porte-monnaie est fermé.');
+            expect(screen.getByRole('button', { name: 'Retirer Chloé Martin' })).toBeTruthy();
+        });
+
+        it('garde la modale et affiche le message de l’API si le statut ne peut pas être relu', async () => {
+            withMembers(true);
+            mocks.removeMember.mockRejectedValue(new ApiError(409, ['Dépenses partagées.']));
+            render(<WalletDetail walletId="wallet-1" />);
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Retirer Chloé Martin' }));
+            mocks.getWalletDetails.mockRejectedValue(new ApiError(500));
+            confirm('Retirer le membre');
+
+            expect((await within(screen.getByRole('dialog')).findByRole('alert')).textContent)
+                .toContain('Dépenses partagées.');
+        });
+
+        it('prévient la page parente quand le porte-monnaie est clôturé, pour qu’elle passe en lecture seule', async () => {
+            withMembers(true);
+            mocks.removeMember.mockRejectedValue(new ApiError(409));
+            const onWalletClosed = vi.fn();
+            render(
+                <WalletClosedProvider value={onWalletClosed}>
+                    <WalletDetail walletId="wallet-1" />
+                </WalletClosedProvider>,
+            );
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Retirer Chloé Martin' }));
+            closeBehindTheScenes(true);
+            confirm('Retirer le membre');
+
+            await waitFor(() => expect(onWalletClosed).toHaveBeenCalledTimes(1));
+            expect(onWalletClosed.mock.calls[0][0]).toContain('vient d’être clôturé');
+            expect(screen.queryByRole('button', { name: /^Retirer/ })).toBeNull();
         });
     });
 

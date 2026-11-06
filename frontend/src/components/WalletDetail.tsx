@@ -16,11 +16,12 @@ import { describeExpenseError, isClosedWalletError } from './expenseErrors';
 import { LockIcon, PlusIcon } from './icons';
 import { InviteMemberForm } from './InviteMemberForm';
 import { MemberActionDialog } from './MemberActionDialog';
-import { isMemberWalletClosedError } from './memberErrors';
-import { useWalletTab } from './WalletTabs';
+import { useWalletClosed, useWalletTab } from './WalletTabs';
 import styles from './WalletDetail.module.css';
 
 type Notice = { kind: 'success' | 'error'; message: string };
+
+const CLOSED_MESSAGE = 'Ce porte-monnaie vient d’être clôturé : l’opération a été refusée.';
 
 type MemberDialog = { action: 'leave' } | { action: 'remove'; member: WalletMember };
 
@@ -57,6 +58,7 @@ export function WalletDetail({ walletId }: { walletId: string }) {
 function WalletDetailContent({ walletId }: { walletId: string }) {
     const { user } = useAuth();
     const router = useRouter();
+    const notifyWalletClosed = useWalletClosed();
     const currentUserId = user?.userId;
     const tab = useWalletTab();
     const showExpenses = tab === 'all' || tab === 'expenses';
@@ -115,15 +117,24 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
         const details = await getWalletDetails(walletId);
         setWallet(details.wallet);
         setMembers(details.members);
+        return details;
     }
 
     function markWalletClosed() {
         setWallet((current) => (current ? { ...current, status: 'CLOSED' } : current));
         setFormOpen(false);
-        setNotice({
-            kind: 'error',
-            message: 'Ce porte-monnaie vient d’être clôturé : l’opération a été refusée.',
-        });
+        setNotice({ kind: 'error', message: CLOSED_MESSAGE });
+        notifyWalletClosed(CLOSED_MESSAGE);
+    }
+
+    // Un 409 peut venir d'une clôture ou d'un historique commun : plutôt que de lire le texte
+    // de l'erreur, on relit le statut du porte-monnaie, seule source fiable.
+    async function isWalletClosedNow(): Promise<boolean> {
+        try {
+            return (await refreshMembers()).wallet.status === 'CLOSED';
+        } catch {
+            return false;
+        }
     }
 
     async function confirmMemberAction(dialog: MemberDialog) {
@@ -139,13 +150,10 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
             setMemberNotice({ kind: 'success', message: `${dialog.member.name} a été retiré(e) du porte-monnaie.` });
             setMemberDialog(undefined);
         } catch (error) {
-            if (isMemberWalletClosedError(error)) {
-                setWallet((current) => (current ? { ...current, status: 'CLOSED' } : current));
+            if (error instanceof ApiError && error.status === 409 && (await isWalletClosedNow())) {
                 setMemberDialog(undefined);
-                setMemberNotice({
-                    kind: 'error',
-                    message: 'Ce porte-monnaie vient d’être clôturé : l’opération a été refusée.',
-                });
+                setMemberNotice({ kind: 'error', message: CLOSED_MESSAGE });
+                notifyWalletClosed(CLOSED_MESSAGE);
                 return;
             }
             // 404 : le membre est déjà parti, la liste est obsolète.
@@ -304,7 +312,7 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
                     </Button>
                 ) : null}
                 {wallet.isCreator && isOpen ? (
-                    <InviteMemberForm walletId={walletId} onInvited={refreshMembers} />
+                    <InviteMemberForm walletId={walletId} onInvited={async () => { await refreshMembers(); }} />
                 ) : null}
             </section>
             ) : null}
