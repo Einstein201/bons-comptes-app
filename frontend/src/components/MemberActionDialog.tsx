@@ -73,7 +73,7 @@ export function MemberActionDialog({
                             : `${memberName} sera retiré(e) de « ${walletTitle} » et n’y aura plus accès, sauf nouvelle invitation.`}
                     </p>
                     <p className={styles.message}>
-                        Cette action est impossible si le porte-monnaie contient déjà des dépenses.
+                        Cette action est impossible s’il existe déjà des dépenses partagées ou des remboursements liés.
                     </p>
                 </div>
 
