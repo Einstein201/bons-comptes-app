@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { getAccessToken, setAccessToken } from './api';
-import { getCurrentUser, login, logout, register, restoreSession } from './auth';
+import { changePassword, getCurrentUser, login, logout, register, restoreSession } from './auth';
 
 const fetchMock = vi.fn<typeof fetch>();
 
@@ -27,9 +27,9 @@ it("inscrit l'utilisateur sans transmettre de token", async () => {
 
 it('se connecte avec les cookies et consulte le contrat réel de /auth/me', async () => {
   fetchMock.mockResolvedValueOnce(Response.json({ accessToken: 'access' }))
-    .mockResolvedValueOnce(Response.json({ userId: 'user' }));
+    .mockResolvedValueOnce(Response.json({ userId: 'user', email: 'alice@example.com', name: 'Alice' }));
   await expect(login({ email: 'alice@example.com', password: 'password-test' }))
-    .resolves.toEqual({ userId: 'user' });
+    .resolves.toEqual({ userId: 'user', email: 'alice@example.com', name: 'Alice' });
   expect(fetchMock.mock.calls[0][1]?.credentials).toBe('include');
   expect(getAccessToken()).toBe('access');
   expect(new Headers(fetchMock.mock.calls[1][1]?.headers).get('Authorization'))
@@ -38,8 +38,8 @@ it('se connecte avec les cookies et consulte le contrat réel de /auth/me', asyn
 
 it('restaure la session via le refresh puis /auth/me', async () => {
   fetchMock.mockResolvedValueOnce(Response.json({ accessToken: 'restored' }))
-    .mockResolvedValueOnce(Response.json({ userId: 'user' }));
-  await expect(restoreSession()).resolves.toEqual({ userId: 'user' });
+    .mockResolvedValueOnce(Response.json({ userId: 'user', email: 'alice@example.com', name: 'Alice' }));
+  await expect(restoreSession()).resolves.toEqual({ userId: 'user', email: 'alice@example.com', name: 'Alice' });
   expect(getAccessToken()).toBe('restored');
 });
 
@@ -63,4 +63,23 @@ it('signale un échec de déconnexion au lieu de simuler un succès', async () =
   fetchMock.mockRejectedValue(new TypeError('Network error'));
   await expect(logout()).rejects.toThrow('Network error');
   expect(getAccessToken()).toBeNull();
+});
+
+it('remplace le token d’accès après un changement de mot de passe', async () => {
+  setAccessToken('old-access');
+  fetchMock.mockResolvedValue(Response.json({
+    message: 'Mot de passe modifié avec succès.',
+    accessToken: 'new-access',
+  }));
+
+  await changePassword({
+    currentPassword: 'ancien',
+    newPassword: 'nouveau123',
+  });
+
+  expect(getAccessToken()).toBe('new-access');
+  expect(fetchMock.mock.calls[0][1]?.body).toBe(JSON.stringify({
+    currentPassword: 'ancien',
+    newPassword: 'nouveau123',
+  }));
 });

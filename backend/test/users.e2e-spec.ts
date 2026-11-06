@@ -142,7 +142,11 @@ describe('User registration (e2e)', () => {
       .get('/auth/me')
       .set('Authorization', authorization)
       .expect(200)
-      .expect({ userId: updated.body.userId, name: 'Alice mise à jour' });
+      .expect({
+        userId: updated.body.userId,
+        email: input.email,
+        name: 'Alice mise à jour',
+      });
   });
 
   it.each([

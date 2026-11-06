@@ -20,8 +20,8 @@ vi.mock('../services/auth', () => ({
 describe('contexte de session', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.restoreSession.mockResolvedValue({ userId: 'user-1' });
-    mocks.login.mockResolvedValue({ userId: 'user-1' });
+    mocks.restoreSession.mockResolvedValue({ userId: 'user-1', email: 'alice@example.com', name: 'Alice' });
+    mocks.login.mockResolvedValue({ userId: 'user-1', email: 'alice@example.com', name: 'Alice' });
     mocks.logout.mockResolvedValue(undefined);
   });
 
@@ -38,12 +38,16 @@ describe('contexte de session', () => {
     const { result } = renderHook(() => useAuth(), { wrapper });
     expect(result.current.status).toBe('loading');
     await waitFor(() => expect(result.current.status).toBe('authenticated'));
-    expect(result.current.user).toEqual({ userId: 'user-1' });
+    expect(result.current.user).toEqual({
+      userId: 'user-1',
+      email: 'alice@example.com',
+      name: 'Alice',
+    });
   });
 
   it('permet de réessayer après une erreur réseau', async () => {
     mocks.restoreSession.mockRejectedValueOnce(new TypeError('offline'))
-      .mockResolvedValueOnce({ userId: 'user-1' });
+      .mockResolvedValueOnce({ userId: 'user-1', email: 'alice@example.com', name: 'Alice' });
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.status).toBe('unavailable'));
     await act(() => result.current.retrySession());
@@ -56,7 +60,11 @@ describe('contexte de session', () => {
     await act(() => result.current.signIn({
       email: 'alice@example.com', password: 'password123',
     }));
-    expect(result.current.user).toEqual({ userId: 'user-1' });
+    expect(result.current.user).toEqual({
+      userId: 'user-1',
+      email: 'alice@example.com',
+      name: 'Alice',
+    });
     await act(() => result.current.signOut());
     expect(result.current.user).toBeNull();
     expect(result.current.status).toBe('signed-out');

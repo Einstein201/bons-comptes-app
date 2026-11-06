@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { ApiError, getAccessToken, setAccessToken, subscribeSession } from '../services/api';
 import { login, logout, restoreSession, type AuthUser, type LoginInput } from '../services/auth';
+import { updateProfile } from '../services/profile';
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated' | 'signed-out' | 'unavailable';
 
@@ -20,6 +21,7 @@ type AuthContextValue = {
   signIn: (input: LoginInput) => Promise<void>;
   signOut: () => Promise<void>;
   retrySession: () => Promise<void>;
+  updateName: (name: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -88,8 +90,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const updateName = useCallback(async (name: string) => {
+    const profile = await updateProfile(name);
+    setUser((current) => current ? { ...current, name: profile.name } : current);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, status, signIn, signOut, retrySession }}>
+    <AuthContext.Provider value={{ user, status, signIn, signOut, retrySession, updateName }}>
       {children}
     </AuthContext.Provider>
   );

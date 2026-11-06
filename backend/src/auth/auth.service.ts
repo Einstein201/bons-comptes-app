@@ -82,14 +82,14 @@ export class AuthService {
   async me(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, name: true },
+      select: { id: true, email: true, name: true },
     });
 
     if (!user) {
       throw new UnauthorizedException('Utilisateur introuvable');
     }
 
-    return { userId: user.id, name: user.name };
+    return { userId: user.id, email: user.email, name: user.name };
   }
 
   private verifyPassword(plain: string, hash: string): Promise<boolean> {

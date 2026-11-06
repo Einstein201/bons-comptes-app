@@ -23,6 +23,12 @@ export type CreateExpenseInput = {
     paidById: string;
 };
 
+// L'API ne modifie que le titre et le montant : la date et le payeur restent ceux de la création.
+export type UpdateExpenseInput = {
+    title?: string;
+    amount?: number;
+};
+
 function expensesPath(walletId: string): string {
     return `/wallets/${encodeURIComponent(walletId)}/expenses`;
 }
@@ -46,6 +52,19 @@ export async function createExpense(
 ): Promise<Expense> {
     const response = await apiRequest(expensesPath(walletId), {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+    });
+    return (await response.json()) as Expense;
+}
+
+export async function updateExpense(
+    walletId: string,
+    expenseId: string,
+    input: UpdateExpenseInput,
+): Promise<Expense> {
+    const response = await apiRequest(`${expensesPath(walletId)}/${encodeURIComponent(expenseId)}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
     });
