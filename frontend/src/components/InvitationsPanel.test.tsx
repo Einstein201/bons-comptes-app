@@ -67,7 +67,7 @@ it.each([
   [404, 'Cette invitation est introuvable. Elle a peut-être été retirée.'],
   [409, 'Cette invitation a déjà été traitée.'],
 ])('explique clairement l’erreur %i sans annoncer de succès', async (status, message) => {
-  vi.mocked(acceptInvitation).mockRejectedValue(new ApiError(status, ['Erreur']));
+  vi.mocked(acceptInvitation).mockRejectedValue(new ApiError(status, ['Cette invitation a déjà été traitée.']));
   render(<InvitationsPanel />);
 
   await screen.findByText('Vacances');
