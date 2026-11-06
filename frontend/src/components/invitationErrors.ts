@@ -1,6 +1,6 @@
 import { ApiError } from '../services/api';
 
-export type InvitationAction = 'load' | 'send' | 'accept' | 'decline';
+export type InvitationAction = 'send' | 'accept' | 'decline';
 
 function mentions(error: ApiError, word: string): boolean {
   return error.messages.some((message) => message.toLowerCase().includes(word));
