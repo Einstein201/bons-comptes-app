@@ -2,16 +2,6 @@ import { ApiError } from '../services/api';
 
 export type MemberAction = 'leave' | 'remove';
 
-// Le backend répond 409 pour un porte-monnaie clôturé comme pour un historique commun :
-// seul son message permet de les distinguer.
-export function isMemberWalletClosedError(error: unknown): boolean {
-    return (
-        error instanceof ApiError &&
-        error.status === 409 &&
-        error.messages.some((message) => /fermé|clôtur/i.test(message))
-    );
-}
-
 export function describeMemberError(error: unknown, action: MemberAction): string {
     if (error instanceof ApiError) {
         switch (error.status) {
@@ -26,7 +16,7 @@ export function describeMemberError(error: unknown, action: MemberAction): strin
                     ? 'Ce porte-monnaie est introuvable.'
                     : 'Ce membre n’existe plus dans ce porte-monnaie. Rechargez la page.';
             case 409:
-                // Historique commun : on affiche l'explication du serveur.
+                // Historique commun (la clôture est traitée avant, via le statut du porte-monnaie).
                 return error.messages.join(' ') ||
                     'Ce porte-monnaie contient des dépenses partagées : l’action est impossible.';
             default:
