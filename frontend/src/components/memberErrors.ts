@@ -14,7 +14,7 @@ export function describeMemberError(error: unknown, action: MemberAction): strin
             case 404:
                 return action === 'leave'
                     ? 'Ce porte-monnaie est introuvable.'
-                    : 'Ce membre n’existe plus dans ce porte-monnaie. Rechargez la page.';
+                    : 'Ce membre ou ce porte-monnaie est introuvable. Rechargez la page.';
             case 409:
                 // Historique commun (la clôture est traitée avant, via le statut du porte-monnaie).
                 return error.messages.join(' ') ||

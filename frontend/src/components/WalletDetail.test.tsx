@@ -537,6 +537,7 @@ describe('détail d’un porte-monnaie', () => {
             fireEvent.click(await screen.findByRole('button', { name: 'Quitter le porte-monnaie' }));
             const dialog = screen.getByRole('dialog', { name: 'Quitter le porte-monnaie' });
             expect(dialog.textContent).toContain('Vous allez quitter « Voyage »');
+            expect(dialog.textContent).toContain('dépenses partagées ou des remboursements liés');
             expect(mocks.leaveWallet).not.toHaveBeenCalled();
 
             confirm('Quitter le porte-monnaie');
@@ -594,7 +595,7 @@ describe('détail d’un porte-monnaie', () => {
 
         it.each([
             [403, 'Seul le créateur du porte-monnaie peut retirer un membre.'],
-            [404, 'Ce membre n’existe plus dans ce porte-monnaie.'],
+            [404, 'Ce membre ou ce porte-monnaie est introuvable.'],
         ])('affiche l’erreur %i d’un retrait', async (status, message) => {
             withMembers(true);
             mocks.removeMember.mockRejectedValue(new ApiError(status));
