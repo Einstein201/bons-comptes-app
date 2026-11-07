@@ -203,6 +203,7 @@ describe('RepaymentsService.declare', () => {
     $queryRaw: Mock;
     walletMember: { findUnique: Mock; findMany: Mock };
     expense: { aggregate: Mock; groupBy: Mock };
+    expenseSplit: { groupBy: Mock };
     repayment: { groupBy: Mock; aggregate: Mock; create: Mock };
     wallet: { update: Mock };
   };
@@ -234,6 +235,12 @@ describe('RepaymentsService.declare', () => {
           .mockResolvedValue([
             { paidById: 'recipient', _sum: { amount: 10000 } },
           ]),
+      },
+      expenseSplit: {
+        groupBy: vi.fn().mockResolvedValue([
+          { userId: 'debtor', _sum: { amount: 5000 } },
+          { userId: 'recipient', _sum: { amount: 5000 } },
+        ]),
       },
       repayment: {
         groupBy: vi.fn().mockResolvedValue([]),
@@ -349,6 +356,12 @@ describe('RepaymentsService.declare', () => {
     transaction.expense.groupBy.mockResolvedValue([
       { paidById: 'recipient', _sum: { amount: 9000 } },
     ]);
+    transaction.expenseSplit.groupBy.mockResolvedValue(
+      ['debtor', 'other', 'recipient'].map((userId) => ({
+        userId,
+        _sum: { amount: 3000 },
+      })),
+    );
 
     await expect(
       repaymentsService.declare('wallet-1', 'debtor', {

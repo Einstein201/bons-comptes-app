@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { calculateBalances, optimizeTransfers } from './balance-calculator.js';
 
-function member(userId: string, paidAmount: number) {
-  return { userId, name: `Nom ${userId}`, paidAmount };
+function member(userId: string, paidAmount: number, shareAmount: number) {
+  return { userId, name: `Nom ${userId}`, paidAmount, shareAmount };
 }
 
 function sumOfBalances(balances: { balance: number }[]) {
@@ -12,8 +12,7 @@ function sumOfBalances(balances: { balance: number }[]) {
 describe('calculateBalances', () => {
   it('reproduces the example of the ticket', () => {
     const result = calculateBalances(
-      10001,
-      [member('user-a', 7000), member('user-b', 3001)],
+      [member('user-a', 7000, 5001), member('user-b', 3001, 5000)],
       [],
     );
 
@@ -38,23 +37,29 @@ describe('calculateBalances', () => {
     ]);
   });
 
-  it('splits the total equally when there is no remainder', () => {
-    const { balances } = calculateBalances(
-      9000,
-      [member('user-a', 9000), member('user-b', 0), member('user-c', 0)],
+  it('uses the recorded shares, even when they are not equal', () => {
+    const { balances, transfers } = calculateBalances(
+      [
+        member('user-a', 9000, 4500),
+        member('user-b', 0, 4500),
+        member('user-late', 0, 0),
+      ],
       [],
     );
 
-    expect(balances.map((item) => item.shareAmount)).toEqual([
-      3000, 3000, 3000,
+    expect(balances.map((item) => item.balance)).toEqual([4500, -4500, 0]);
+    expect(transfers).toEqual([
+      { fromUserId: 'user-b', toUserId: 'user-a', amount: 4500 },
     ]);
-    expect(balances.map((item) => item.balance)).toEqual([6000, -3000, -3000]);
   });
 
-  it('gives the remaining cents to the first members sorted by id', () => {
+  it('returns the members sorted by id', () => {
     const { balances } = calculateBalances(
-      101,
-      [member('user-c', 0), member('user-a', 101), member('user-b', 0)],
+      [
+        member('user-c', 0, 33),
+        member('user-a', 101, 34),
+        member('user-b', 0, 34),
+      ],
       [],
     );
 
@@ -63,14 +68,12 @@ describe('calculateBalances', () => {
       'user-b',
       'user-c',
     ]);
-    expect(balances.map((item) => item.shareAmount)).toEqual([34, 34, 33]);
     expect(sumOfBalances(balances)).toBe(0);
   });
 
   it('returns zero balances and no transfer when there is no expense', () => {
     const result = calculateBalances(
-      0,
-      [member('user-a', 0), member('user-b', 0)],
+      [member('user-a', 0, 0), member('user-b', 0, 0)],
       [],
     );
 
@@ -80,8 +83,7 @@ describe('calculateBalances', () => {
 
   it('applies a paid repayment: the sender owes less, the recipient receives less', () => {
     const result = calculateBalances(
-      10000,
-      [member('user-a', 10000), member('user-b', 0)],
+      [member('user-a', 10000, 5000), member('user-b', 0, 5000)],
       [{ fromUserId: 'user-b', toUserId: 'user-a', amount: 2000 }],
     );
 
@@ -93,8 +95,7 @@ describe('calculateBalances', () => {
 
   it('needs no transfer once every debt is repaid', () => {
     const result = calculateBalances(
-      10000,
-      [member('user-a', 10000), member('user-b', 0)],
+      [member('user-a', 10000, 5000), member('user-b', 0, 5000)],
       [{ fromUserId: 'user-b', toUserId: 'user-a', amount: 5000 }],
     );
 
@@ -104,12 +105,11 @@ describe('calculateBalances', () => {
 
   it('always produces balances whose sum is zero', () => {
     const { balances } = calculateBalances(
-      100003,
       [
-        member('user-a', 50000),
-        member('user-b', 30003),
-        member('user-c', 20000),
-        member('user-d', 0),
+        member('user-a', 50000, 25001),
+        member('user-b', 30003, 25001),
+        member('user-c', 20000, 25001),
+        member('user-d', 0, 25000),
       ],
       [{ fromUserId: 'user-d', toUserId: 'user-a', amount: 777 }],
     );
@@ -117,12 +117,20 @@ describe('calculateBalances', () => {
     expect(sumOfBalances(balances)).toBe(0);
   });
 
-  it('refuses an unbalanced result', () => {
+  it('refuses a repayment to someone outside the members', () => {
     expect(() =>
       calculateBalances(
-        1000,
-        [member('user-a', 1000), member('user-b', 0)],
+        [member('user-a', 1000, 500), member('user-b', 0, 500)],
         [{ fromUserId: 'user-b', toUserId: 'someone-else', amount: 100 }],
+      ),
+    ).toThrow('Le bilan est déséquilibré');
+  });
+
+  it('refuses shares that do not match the amounts paid', () => {
+    expect(() =>
+      calculateBalances(
+        [member('user-a', 1000, 500), member('user-b', 0, 499)],
+        [],
       ),
     ).toThrow('Le bilan est déséquilibré');
   });
