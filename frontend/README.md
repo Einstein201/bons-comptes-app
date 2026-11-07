@@ -73,7 +73,8 @@ doivent être sur le même site (par exemple deux sous-domaines du même domaine
 ou `localhost` avec des ports différents). Deux domaines sans lien ne
 permettront pas la restauration de session avec cette configuration.
 
-`GET /auth/me` renvoie actuellement `{ userId }`, sans nom ni email.
+`GET /auth/me` renvoie actuellement `{ userId, email, name }`. Le frontend s'en
+sert pour hydrater les informations du compte connecté.
 
 ## Services de clôture et de bilan
 
@@ -130,8 +131,9 @@ protégées affichent un état de vérification avant d'exposer leur contenu et
 redirigent un visiteur vers la connexion. En cas d'indisponibilité réseau, elles
 proposent de réessayer au lieu de déclarer la session invalide.
 
-Le backend renvoie uniquement `{ userId }` pour `GET /auth/me`; l'en-tête
-affiche donc les actions de compte sans inventer de nom ou d'adresse email.
+Le backend renvoie `{ userId, email, name }` pour `GET /auth/me`. L'en-tête
+affiche le nom du compte; son courriel est consultable dans les informations du
+compte.
 La déconnexion efface toujours le token en mémoire. Si le serveur ne confirme
 pas l'opération, l'interface indique que la révocation serveur n'a pas été
 confirmée.
