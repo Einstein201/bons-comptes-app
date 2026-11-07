@@ -1,6 +1,6 @@
 # Les Bons Comptes - Front-end
 
-Application web de **Les Bons Comptes**, construite avec Next.js, React et TypeScript. Ce projet est indépendant du backend NestJS situé à la racine du dépôt.
+Application web de **Les Bons Comptes**, construite avec Next.js, React et TypeScript. Le backend NestJS se trouve dans le dossier voisin `../backend`.
 
 ## Prérequis
 
@@ -53,7 +53,7 @@ Le lint utilise ESLint 10 et `typescript-eslint`. Une résolution forcée
 dans leurs dépendances transitives. Elle pourra être retirée lorsque ces outils
 utiliseront une version corrigée sans cette résolution.
 
-Le routage utilise l'App Router dans `src/app/`. Les composants réutilisables seront placés dans `src/components/`, et les appels HTTP vers le backend dans `src/services/`.
+Le routage utilise l'App Router dans `src/app/`. Les composants réutilisables se trouvent dans `src/components/`, et les appels HTTP vers le backend dans `src/services/`.
 
 ## Client API et session
 
