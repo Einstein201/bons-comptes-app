@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AppHeader } from './AppHeader';
 
@@ -36,19 +36,41 @@ describe('AppHeader', () => {
     vi.clearAllMocks();
   });
 
-  it('ouvre le menu puis la modale des informations du compte', () => {
+  it('ouvre le menu avec Profil et Déconnexion, puis le profil', () => {
+    const signOut = vi.fn();
     mocks.useAuth.mockReturnValue({
       status: 'authenticated',
       user: { userId: 'user-1', email: 'alice@example.com', name: 'Alice' },
-      signOut: vi.fn(),
+      signOut,
+      updateName: vi.fn(),
+    });
+    render(<AppHeader />);
+
+    expect(screen.queryByRole('button', { name: 'Déconnexion' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Alice' }));
+    expect(screen.getByRole('menuitem', { name: 'Profil' })).not.toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Déconnexion' })).not.toBeNull();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Profil' }));
+
+    expect(screen.getByRole('dialog')).not.toBeNull();
+    expect(signOut).not.toHaveBeenCalled();
+  });
+
+  it('déconnecte depuis le menu du compte', async () => {
+    const signOut = vi.fn().mockResolvedValue(undefined);
+    mocks.useAuth.mockReturnValue({
+      status: 'authenticated',
+      user: { userId: 'user-1', email: 'alice@example.com', name: 'Alice' },
+      signOut,
       updateName: vi.fn(),
     });
     render(<AppHeader />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Alice' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Informations du compte' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Déconnexion' }));
 
-    expect(screen.getByRole('dialog')).not.toBeNull();
+    await waitFor(() => expect(signOut).toHaveBeenCalledOnce());
+    expect(mocks.replace).toHaveBeenCalledWith('/login');
   });
 
   it('ferme le menu au clic extérieur et avec Échap', () => {
@@ -62,12 +84,12 @@ describe('AppHeader', () => {
     const accountButton = screen.getByRole('button', { name: 'Alice' });
 
     fireEvent.click(accountButton);
-    expect(screen.getByRole('button', { name: 'Informations du compte' })).not.toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Profil' })).not.toBeNull();
     fireEvent.keyDown(accountButton, { key: 'Escape' });
-    expect(screen.queryByRole('button', { name: 'Informations du compte' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Profil' })).toBeNull();
 
     fireEvent.click(accountButton);
     fireEvent.mouseDown(document.body);
-    expect(screen.queryByRole('button', { name: 'Informations du compte' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Profil' })).toBeNull();
   });
 });

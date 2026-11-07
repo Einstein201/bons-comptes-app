@@ -41,10 +41,10 @@ describe('formulaires d’authentification', () => {
     mocks.signIn.mockResolvedValue(undefined);
     render(<AuthForm mode="login" />);
 
-    fireEvent.change(screen.getByLabelText('Adresse email (obligatoire)'), {
+    fireEvent.change(screen.getByLabelText(/^Adresse email/), {
       target: { value: 'alice@example.com' },
     });
-    fireEvent.change(screen.getByLabelText('Mot de passe (obligatoire)'), {
+    fireEvent.change(screen.getByLabelText(/^Mot de passe/), {
       target: { value: 'password123' },
     });
     fireEvent.submit(screen.getByRole('button', { name: 'Se connecter' }).closest('form')!);
@@ -60,10 +60,10 @@ describe('formulaires d’authentification', () => {
     window.history.replaceState({}, '', '/login?next=%2F%2Fevil.example');
     mocks.signIn.mockResolvedValue(undefined);
     render(<AuthForm mode="login" />);
-    fireEvent.change(screen.getByLabelText('Adresse email (obligatoire)'), {
+    fireEvent.change(screen.getByLabelText(/^Adresse email/), {
       target: { value: 'alice@example.com' },
     });
-    fireEvent.change(screen.getByLabelText('Mot de passe (obligatoire)'), {
+    fireEvent.change(screen.getByLabelText(/^Mot de passe/), {
       target: { value: 'password123' },
     });
     fireEvent.submit(screen.getByRole('button', { name: 'Se connecter' }).closest('form')!);
@@ -73,10 +73,10 @@ describe('formulaires d’authentification', () => {
   it('affiche une erreur de connexion sans révéler de détails serveur', async () => {
     mocks.signIn.mockRejectedValue(new ApiError(401, ['Unauthorized']));
     render(<AuthForm mode="login" />);
-    fireEvent.change(screen.getByLabelText('Adresse email (obligatoire)'), {
+    fireEvent.change(screen.getByLabelText(/^Adresse email/), {
       target: { value: 'alice@example.com' },
     });
-    fireEvent.change(screen.getByLabelText('Mot de passe (obligatoire)'), {
+    fireEvent.change(screen.getByLabelText(/^Mot de passe/), {
       target: { value: 'bad-password' },
     });
     fireEvent.submit(screen.getByRole('button', { name: 'Se connecter' }).closest('form')!);
@@ -88,11 +88,11 @@ describe('formulaires d’authentification', () => {
   it('inscrit l’utilisateur puis le dirige vers la connexion', async () => {
     mocks.register.mockResolvedValue(undefined);
     render(<AuthForm mode="register" />);
-    fireEvent.change(screen.getByLabelText('Nom (obligatoire)'), { target: { value: ' Alice ' } });
-    fireEvent.change(screen.getByLabelText('Adresse email (obligatoire)'), {
+    fireEvent.change(screen.getByLabelText(/^Nom/), { target: { value: ' Alice ' } });
+    fireEvent.change(screen.getByLabelText(/^Adresse email/), {
       target: { value: 'alice@example.com' },
     });
-    fireEvent.change(screen.getByLabelText('Mot de passe (obligatoire)'), {
+    fireEvent.change(screen.getByLabelText(/^Mot de passe/), {
       target: { value: 'password123' },
     });
     fireEvent.submit(screen.getByRole('button', { name: 'Créer mon compte' }).closest('form')!);
@@ -104,12 +104,22 @@ describe('formulaires d’authentification', () => {
     expect(mocks.signIn).not.toHaveBeenCalled();
   });
 
+  it('n’affiche pas le surtitre Créer un compte au-dessus de l’inscription', () => {
+    render(<AuthForm mode="register" />);
+
+    expect(screen.queryByText('Créer un compte', { exact: true })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Inscription' }).className)
+      .toContain('registerTitle');
+  });
+
   it('expose les contraintes HTML des champs obligatoires', () => {
     render(<AuthForm mode="register" />);
-    expect((screen.getByLabelText('Nom (obligatoire)') as HTMLInputElement).required).toBe(true);
-    expect((screen.getByLabelText('Adresse email (obligatoire)') as HTMLInputElement).required).toBe(true);
-    expect((screen.getByLabelText('Mot de passe (obligatoire)') as HTMLInputElement).required).toBe(true);
-    expect((screen.getByLabelText('Mot de passe (obligatoire)') as HTMLInputElement).minLength).toBe(8);
+    const nameInput = screen.getByLabelText(/^Nom/) as HTMLInputElement;
+    expect(nameInput.required).toBe(true);
+    expect(nameInput.labels?.[0].querySelector('[aria-hidden="true"]')?.textContent).toBe('*');
+    expect((screen.getByLabelText(/^Adresse email/) as HTMLInputElement).required).toBe(true);
+    expect((screen.getByLabelText(/^Mot de passe/) as HTMLInputElement).required).toBe(true);
+    expect((screen.getByLabelText(/^Mot de passe/) as HTMLInputElement).minLength).toBe(8);
   });
 
   it('n’affiche pas l’accroche supprimée sur la page de connexion', () => {
