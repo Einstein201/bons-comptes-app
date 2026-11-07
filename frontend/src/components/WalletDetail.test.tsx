@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../services/api';
 import type { Expense } from '../services/expenses';
 import { mergeExpenses, WalletDetail } from './WalletDetail';
-import { WalletTabProvider } from './WalletTabs';
+import { WalletClosedProvider, WalletTabProvider } from './WalletTabs';
 
 const mocks = vi.hoisted(() => ({
     getWalletDetails: vi.fn(),
@@ -14,10 +14,18 @@ const mocks = vi.hoisted(() => ({
     createExpense: vi.fn(),
     updateExpense: vi.fn(),
     sendInvitation: vi.fn(),
+    leaveWallet: vi.fn(),
+    removeMember: vi.fn(),
+    push: vi.fn(),
 }));
 
 vi.mock('../contexts/AuthContext', () => ({
     useAuth: () => ({ user: { userId: 'me' } }),
+}));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }));
+vi.mock('../services/memberships', () => ({
+    leaveWallet: mocks.leaveWallet,
+    removeMember: mocks.removeMember,
 }));
 vi.mock('../services/invitations', () => ({ sendInvitation: mocks.sendInvitation }));
 vi.mock('../services/wallets', () => ({ getWalletDetails: mocks.getWalletDetails }));
@@ -473,6 +481,216 @@ describe('détail d’un porte-monnaie', () => {
             await screen.findByText('Une invitation a été envoyée à bob@example.com.');
             expect(mocks.sendInvitation).toHaveBeenCalledWith('wallet-1', 'bob@example.com');
             await waitFor(() => expect(mocks.getWalletDetails).toHaveBeenCalledTimes(2));
+        });
+    });
+
+    describe('quitter et retirer un membre', () => {
+        const withMembers = (isCreator: boolean, status: 'OPEN' | 'CLOSED' = 'OPEN') => {
+            mocks.getWalletDetails.mockResolvedValue({
+                wallet: { id: 'wallet-1', title: 'Voyage', description: null, status, createdAt: '', isCreator },
+                members: [
+                    member('me', 'Marie Dupont'),
+                    member('chloe', 'Chloé Martin'),
+                    member('invited', 'Paul Invité', 'INVITED'),
+                ],
+            });
+            mocks.listExpenses.mockResolvedValue({ items: [], nextCursor: null, totalAmount: 0 });
+        };
+        const leaveButton = () => screen.queryByRole('button', { name: 'Quitter le porte-monnaie' });
+        const confirm = (name: string) =>
+            fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name }));
+
+        it('propose « Quitter » à un membre, pas « Retirer »', async () => {
+            withMembers(false);
+            render(<WalletDetail walletId="wallet-1" />);
+
+            await screen.findByRole('list', { name: 'Détail des membres' });
+            expect(leaveButton()).not.toBeNull();
+            expect(screen.queryByRole('button', { name: /^Retirer/ })).toBeNull();
+        });
+
+        it('ne propose pas « Quitter » au créateur, mais « Retirer » sur les autres membres acceptés', async () => {
+            withMembers(true);
+            render(<WalletDetail walletId="wallet-1" />);
+
+            await screen.findByRole('list', { name: 'Détail des membres' });
+            expect(leaveButton()).toBeNull();
+            expect(screen.getByRole('button', { name: 'Retirer Chloé Martin' })).toBeTruthy();
+            expect(screen.queryByRole('button', { name: 'Retirer Marie Dupont' })).toBeNull();
+            expect(screen.queryByRole('button', { name: 'Retirer Paul Invité' })).toBeNull();
+        });
+
+        it.each([[false], [true]])('n’affiche aucun bouton sur un porte-monnaie clos (créateur : %s)', async (isCreator) => {
+            withMembers(isCreator, 'CLOSED');
+            render(<WalletDetail walletId="wallet-1" />);
+
+            await screen.findByRole('list', { name: 'Détail des membres' });
+            expect(leaveButton()).toBeNull();
+            expect(screen.queryByRole('button', { name: /^Retirer/ })).toBeNull();
+        });
+
+        it('demande confirmation puis redirige vers le tableau de bord après avoir quitté', async () => {
+            withMembers(false);
+            mocks.leaveWallet.mockResolvedValue(undefined);
+            render(<WalletDetail walletId="wallet-1" />);
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Quitter le porte-monnaie' }));
+            const dialog = screen.getByRole('dialog', { name: 'Quitter le porte-monnaie' });
+            expect(dialog.textContent).toContain('Vous allez quitter « Voyage »');
+            expect(dialog.textContent).toContain('dépenses partagées ou des remboursements liés');
+            expect(mocks.leaveWallet).not.toHaveBeenCalled();
+
+            confirm('Quitter le porte-monnaie');
+
+            await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/'));
+            expect(mocks.leaveWallet).toHaveBeenCalledWith('wallet-1');
+        });
+
+        it('annuler ne déclenche aucune action', async () => {
+            withMembers(false);
+            render(<WalletDetail walletId="wallet-1" />);
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Quitter le porte-monnaie' }));
+            confirm('Annuler');
+
+            expect(screen.queryByRole('dialog')).toBeNull();
+            expect(mocks.leaveWallet).not.toHaveBeenCalled();
+            expect(mocks.push).not.toHaveBeenCalled();
+        });
+
+        it('retire un membre après confirmation et met la liste à jour', async () => {
+            withMembers(true);
+            mocks.removeMember.mockResolvedValue(undefined);
+            render(<WalletDetail walletId="wallet-1" />);
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Retirer Chloé Martin' }));
+            expect(screen.getByRole('dialog').textContent).toContain('Chloé Martin sera retiré(e) de « Voyage »');
+            confirm('Retirer le membre');
+
+            await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+            expect(mocks.removeMember).toHaveBeenCalledWith('wallet-1', 'chloe');
+            const list = screen.getByRole('list', { name: 'Détail des membres' });
+            expect(within(list).queryByText('Chloé Martin')).toBeNull();
+            expect(within(list).getByText('Marie Dupont')).toBeTruthy();
+            expect(screen.getByRole('status').textContent).toContain('Chloé Martin a été retiré(e)');
+            expect(mocks.push).not.toHaveBeenCalled();
+        });
+
+        it('affiche le message de l’API pour un historique commun (409) et garde la modale ouverte', async () => {
+            withMembers(true);
+            mocks.removeMember.mockRejectedValue(
+                new ApiError(409, ['Ce porte-monnaie contient des dépenses partagées.']),
+            );
+            render(<WalletDetail walletId="wallet-1" />);
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Retirer Chloé Martin' }));
+            confirm('Retirer le membre');
+
+            const dialog = screen.getByRole('dialog');
+            expect((await within(dialog).findByRole('alert')).textContent)
+                .toContain('Ce porte-monnaie contient des dépenses partagées.');
+            expect(within(dialog).getByRole('button', { name: 'Retirer le membre' })).toHaveProperty('disabled', false);
+            expect(screen.getByRole('button', { name: 'Retirer Chloé Martin' })).toBeTruthy();
+        });
+
+        it.each([
+            [403, 'Seul le créateur du porte-monnaie peut retirer un membre.'],
+            [404, 'Ce membre ou ce porte-monnaie est introuvable.'],
+        ])('affiche l’erreur %i d’un retrait', async (status, message) => {
+            withMembers(true);
+            mocks.removeMember.mockRejectedValue(new ApiError(status));
+            render(<WalletDetail walletId="wallet-1" />);
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Retirer Chloé Martin' }));
+            confirm('Retirer le membre');
+
+            expect((await within(screen.getByRole('dialog')).findByRole('alert')).textContent).toContain(message);
+        });
+
+        it.each([
+            [403, 'le créateur ne peut pas le quitter'],
+            [404, 'Ce porte-monnaie est introuvable.'],
+            [409, 'dépenses partagées'],
+        ])('affiche l’erreur %i en quittant, sans redirection', async (status, message) => {
+            withMembers(false);
+            mocks.leaveWallet.mockRejectedValue(
+                new ApiError(status, status === 409 ? ['Ce porte-monnaie contient des dépenses partagées.'] : []),
+            );
+            render(<WalletDetail walletId="wallet-1" />);
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Quitter le porte-monnaie' }));
+            confirm('Quitter le porte-monnaie');
+
+            expect((await within(screen.getByRole('dialog')).findByRole('alert')).textContent).toContain(message);
+            expect(mocks.push).not.toHaveBeenCalled();
+        });
+
+        // Le statut est relu après un 409 : le texte de l'erreur n'est jamais interprété.
+        const closeBehindTheScenes = (isCreator: boolean) => {
+            mocks.getWalletDetails.mockResolvedValue({
+                wallet: { id: 'wallet-1', title: 'Voyage', description: null, status: 'CLOSED', createdAt: '', isCreator },
+                members: [member('me', 'Marie Dupont'), member('chloe', 'Chloé Martin')],
+            });
+        };
+
+        it('bascule en lecture seule si le statut relu après un 409 est CLOSED, quel que soit le message', async () => {
+            withMembers(false);
+            mocks.leaveWallet.mockRejectedValue(new ApiError(409, ['Message sans rapport']));
+            render(<WalletDetail walletId="wallet-1" />);
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Quitter le porte-monnaie' }));
+            closeBehindTheScenes(false);
+            confirm('Quitter le porte-monnaie');
+
+            expect((await screen.findByText(/vient d’être clôturé/)).textContent).toBeTruthy();
+            expect(screen.queryByRole('dialog')).toBeNull();
+            expect(leaveButton()).toBeNull();
+            expect(mocks.push).not.toHaveBeenCalled();
+        });
+
+        it('garde la modale ouverte si le porte-monnaie est resté ouvert, même si le message parle de clôture', async () => {
+            withMembers(true);
+            mocks.removeMember.mockRejectedValue(new ApiError(409, ['Ce porte-monnaie est fermé.']));
+            render(<WalletDetail walletId="wallet-1" />);
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Retirer Chloé Martin' }));
+            confirm('Retirer le membre');
+
+            const dialog = screen.getByRole('dialog');
+            expect((await within(dialog).findByRole('alert')).textContent).toContain('Ce porte-monnaie est fermé.');
+            expect(screen.getByRole('button', { name: 'Retirer Chloé Martin' })).toBeTruthy();
+        });
+
+        it('garde la modale et affiche le message de l’API si le statut ne peut pas être relu', async () => {
+            withMembers(true);
+            mocks.removeMember.mockRejectedValue(new ApiError(409, ['Dépenses partagées.']));
+            render(<WalletDetail walletId="wallet-1" />);
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Retirer Chloé Martin' }));
+            mocks.getWalletDetails.mockRejectedValue(new ApiError(500));
+            confirm('Retirer le membre');
+
+            expect((await within(screen.getByRole('dialog')).findByRole('alert')).textContent)
+                .toContain('Dépenses partagées.');
+        });
+
+        it('prévient la page parente quand le porte-monnaie est clôturé, pour qu’elle passe en lecture seule', async () => {
+            withMembers(true);
+            mocks.removeMember.mockRejectedValue(new ApiError(409));
+            const onWalletClosed = vi.fn();
+            render(
+                <WalletClosedProvider value={onWalletClosed}>
+                    <WalletDetail walletId="wallet-1" />
+                </WalletClosedProvider>,
+            );
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Retirer Chloé Martin' }));
+            closeBehindTheScenes(true);
+            confirm('Retirer le membre');
+
+            await waitFor(() => expect(onWalletClosed).toHaveBeenCalledTimes(1));
+            expect(onWalletClosed.mock.calls[0][0]).toContain('vient d’être clôturé');
+            expect(screen.queryByRole('button', { name: /^Retirer/ })).toBeNull();
         });
     });
 

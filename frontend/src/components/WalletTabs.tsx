@@ -10,6 +10,16 @@ const WalletTabContext = createContext<WalletTabId | 'all'>('all');
 
 export const WalletTabProvider = WalletTabContext.Provider;
 
+// Le détail prévient la page (WalletBalance) qui détient le statut : elle se recharge et passe
+// en lecture seule (en-tête, onglets, bilan). Hors page, l'appel ne fait rien.
+const WalletClosedContext = createContext<(message: string) => void>(() => undefined);
+
+export const WalletClosedProvider = WalletClosedContext.Provider;
+
+export function useWalletClosed() {
+  return useContext(WalletClosedContext);
+}
+
 export function useWalletTab() {
   return useContext(WalletTabContext);
 }

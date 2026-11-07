@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ApiError } from '../services/api';
 import { WalletBalance } from './WalletBalance';
+import { useWalletClosed } from './WalletTabs';
 
 const mocks = vi.hoisted(() => ({
   getWallet: vi.fn(), closeWallet: vi.fn(),
@@ -337,4 +338,24 @@ it('affiche automatiquement le bilan après une clôture réussie', async () => 
   await screen.findByRole('table');
   expect(screen.getByRole('tab', { name: 'Bilan' }).getAttribute('aria-selected')).toBe('true');
   expect(screen.queryByRole('tab', { name: 'Clôture' })).toBeNull();
+});
+
+function ClosedByChild() {
+  const notifyWalletClosed = useWalletClosed();
+  return <button onClick={() => notifyWalletClosed('Ce porte-monnaie vient d’être clôturé : l’opération a été refusée.')}>Action refusée</button>;
+}
+
+it('relit le statut et passe toute la page en lecture seule quand le détail signale une clôture', async () => {
+  render(<WalletBalance walletId="wallet-1"><ClosedByChild /></WalletBalance>);
+  await screen.findByText('Ouvert');
+  expect(screen.getByRole('tab', { name: 'Clôture' })).toBeTruthy();
+
+  mocks.getWallet.mockResolvedValue(closedDetail);
+  fireEvent.click(screen.getByRole('button', { name: 'Action refusée' }));
+
+  await screen.findByText('Clôturé');
+  expect(screen.queryByText('Ouvert')).toBeNull();
+  expect(screen.queryByRole('tab', { name: 'Clôture' })).toBeNull();
+  expect(screen.getByRole('tab', { name: 'Bilan' })).toBeTruthy();
+  expect(screen.getByRole('status').textContent).toContain('vient d’être clôturé');
 });
