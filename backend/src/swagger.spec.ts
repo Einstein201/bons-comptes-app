@@ -221,6 +221,27 @@ describe('documentation Swagger', () => {
     }
   });
 
+  it('documente les champs renvoyés par GET /auth/me', async () => {
+    app = await createApp(true);
+    const { body } = await request(app.getHttpServer()).get('/api/docs-json');
+    const document = body as OpenApiDocument;
+    const currentUser = document.paths['/auth/me'].get;
+
+    expect(JSON.stringify(currentUser.responses['200'].content)).toContain(
+      '#/components/schemas/CurrentUserResponseDto',
+    );
+    expect(document.components.schemas.CurrentUserResponseDto.required).toEqual(
+      ['userId', 'email', 'name'],
+    );
+    expect(
+      document.components.schemas.CurrentUserResponseDto.properties,
+    ).toMatchObject({
+      userId: { type: 'string', format: 'uuid' },
+      email: { type: 'string', format: 'email', example: 'alice@example.com' },
+      name: { type: 'string', example: 'Alice Martin' },
+    });
+  });
+
   it('décrit les réponses et les erreurs de la modification d’une dépense', async () => {
     app = await createApp(true);
     const { body } = await request(app.getHttpServer()).get('/api/docs-json');

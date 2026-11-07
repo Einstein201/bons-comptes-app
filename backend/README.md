@@ -57,30 +57,30 @@ Le fichier `.env.example` contient une URL locale fictive pour démarrer; rempla
 
 Le groupe utilise la branche Neon `dev`; `production` est réservée à la production. Demandez au responsable du projet de vous inviter et de transmettre les URL de connexion par un canal privé. Ne partagez pas le compte propriétaire.
 
-Dans votre fichier local `backend/.env` (non commité), configurez `DATABASE_URL` (connexion de l’application), `DATABASE_URL_UNPOOLED` (migrations Prisma), `NEON_BRANCH=dev`, `PORT` et `JWT_SECRET`. Ne partagez pas ces valeurs publiquement et utilisez uniquement des données fictives.
+Dans votre fichier local `backend/.env` (non commité), configurez `DATABASE_URL` pour l'application et `DATABASE_URL_UNPOOLED` pour les migrations Prisma. Ces deux URL doivent cibler la branche Neon `dev`; `DATABASE_URL_UNPOOLED` doit être une URL de connexion directe. Configurez également `PORT`, `JWT_SECRET` et `JWT_REFRESH_SECRET`. Ne partagez pas ces valeurs publiquement et utilisez uniquement des données fictives.
 
 Depuis `backend/`, générez le client avec `npx prisma generate`. Le responsable vérifie que la configuration cible `dev`, puis applique les migrations avec `npx prisma migrate deploy` et vérifie avec `npx prisma migrate status`. Ne lancez pas de migration sur `production`. IF-3 refuse volontairement les anciennes données de portefeuille ou de dépense, faute de créateur et de date métier fiables.
 
 
-## JWT configuration
+## Configuration JWT
 
-Generate a JWT secret:
+Générez deux secrets distincts avec cette commande, une fois pour chaque variable :
 
 ```bash
 openssl rand -hex 32
 ```
 
-Add the generated value to `backend/.env`:
+Ajoutez-les à `backend/.env` :
 
 ```env
 JWT_SECRET=your_generated_secret
 JWT_REFRESH_SECRET=your_generated_refresh_secret
 ```
 
-The backend uses this secret to sign and verify JWTs.
+`JWT_SECRET` signe les jetons d'accès. `JWT_REFRESH_SECRET` signe et vérifie les jetons de renouvellement.
 
-Limite connue : les refresh tokens ne sont pas stockés côté serveur. `POST /auth/refresh` émet un nouveau jeton mais l'ancien reste valide jusqu'à son expiration (7 jours), et `POST /auth/logout` ne fait qu'effacer le cookie. La révocation (`jti`) est prévue dans un billet de suivi.
-Do not commit `.env` or share the secret.
+Limite connue : les jetons de renouvellement individuels ne sont pas stockés côté serveur. `POST /auth/refresh` émet un nouveau jeton sans invalider l'ancien, qui reste réutilisable jusqu'à son expiration (7 jours). `POST /auth/logout` efface le cookie du navigateur, mais ne révoque pas une copie du jeton. Un changement de mot de passe invalide les anciens jetons de renouvellement. La révocation dédiée à la déconnexion (`jti`) reste à implémenter.
+Ne commitez pas `.env` et ne partagez pas les secrets.
 
 ## Documentation de l'API (Swagger)
 
@@ -94,6 +94,32 @@ Elle n'est servie que si `SWAGGER_ENABLED=true` dans `backend/.env`, et jamais l
 Pour appeler une route protégée depuis l'interface : exécuter `POST /auth/login`, copier l'`accessToken` reçu, cliquer sur **Authorize** et le coller dans le champ `bearer`.
 
 Pour documenter une nouvelle route : `@ApiOperation` pour le résumé, `@ApiOkResponse` ou `@ApiCreatedResponse` pour la réponse, `@ApiErrors` (`src/common/swagger/api-docs.decorators.ts`) pour les erreurs, et `@ApiProperty` sur chaque champ des DTO. `src/swagger.spec.ts` vérifie que chaque route a un résumé, une réponse documentée et la bonne authentification.
+
+## Aperçu des routes
+
+Ce README présente les principaux parcours de l'API. Pour le détail des paramètres,
+permissions, réponses et erreurs, consultez [la documentation Swagger](http://localhost:3000/api/docs),
+disponible lorsque `SWAGGER_ENABLED=true` et que le backend est démarré.
+
+- **Authentification et comptes :** `POST /users`, `POST /auth/login`,
+  `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/change-password`,
+  `GET /auth/me`, `PATCH /users/me`.
+- **Porte-monnaies et bilan :** `POST /wallets`, `GET /wallets`,
+  `GET /wallets/:id`, `POST /wallets/:id/close`,
+  `GET /wallets/:id/balance`, `GET /wallets/:id/optimized-payments`.
+- **Dépenses :** `GET` et `POST /wallets/:walletId/expenses`,
+  `PATCH` et `DELETE /wallets/:walletId/expenses/:id`.
+- **Invitations :** `POST /wallets/:walletId/invitations`,
+  `GET /invitations`, `POST /invitations/:id/accept`,
+  `POST /invitations/:id/decline`,
+  `DELETE /wallets/:walletId/invitations/:id`.
+- **Membres :** `DELETE /wallets/:walletId/members/me` et
+  `DELETE /wallets/:walletId/members/:userId`.
+- **Remboursements :** `GET` et `POST /wallets/:walletId/repayments`,
+  `POST /wallets/:walletId/repayments/:repaymentId/confirm` et
+  `POST /wallets/:walletId/repayments/:repaymentId/cancel`.
+- **Notifications :** `GET /notifications`, `POST /notifications/read-all`,
+  `POST /notifications/:id/read`.
 
 ## API utilisateurs
 
@@ -118,9 +144,9 @@ La route `POST /users` crée un compte. Elle attend un courriel valide, un nom d
 
 `total` est le nombre de porte-monnaies de la section, quels que soient la limite et le curseur (compteurs des onglets, nombre de pages : `ceil(total / limit)`).
 
-Chaque élément expose `id`, `title`, `description`, `status`, `createdAt`, `updatedAt`, `closedAt`, `creatorName` (nom du créateur, jamais son courriel ni son identifiant) et `isCreator` ; une invitation ajoute `invitedAt`.
+Chaque élément expose `id`, `title`, `description`, `status`, `createdAt`, `updatedAt`, `closedAt`, `creatorName` (nom du créateur, jamais son courriel ni son identifiant) et `isCreator` ; une invitation ajoute `invitationId` (identifiant de l'adhésion à utiliser pour y répondre) et `invitedAt`.
 
-- `isCreator` vaut `true` quand l'utilisateur est le créateur du porte-monnaie. Il sert à l'interface (afficher « Vous », montrer ou masquer les actions réservées au créateur : ajouter une dépense, demander un remboursement, répartir). Les droits restent vérifiés côté serveur par chaque route concernée : les autres membres ne peuvent que rembourser.
+- `isCreator` vaut `true` quand l'utilisateur est le créateur du porte-monnaie. Il sert à l'interface pour afficher « Vous » et les actions réservées au créateur, comme inviter, clôturer ou retirer un membre. Tout membre peut ajouter une dépense dans un porte-monnaie ouvert ; seul son payeur peut la modifier ou la supprimer. Les actions de remboursement dépendent du rôle du membre et du statut du remboursement. L'interface ne remplace jamais les contrôles de droits côté serveur.
 - `updatedAt` est la date de la dernière action sur le porte-monnaie. Chaque action (ouverture, clôture, dépense, demande de remboursement, remboursement...) doit rafraîchir `Wallet.updatedAt` dans la même transaction : Prisma ne le fait seul que lorsque la ligne du porte-monnaie elle-même est modifiée.
 
 Paramètres de requête : `limit` (de 1 à 100, 20 par défaut, appliqué à chaque section) et un curseur par section : `openCursor`, `closedCursor`, `invitationsCursor`. Quand `nextCursor` n'est pas `null`, il se passe tel quel dans le paramètre de la section concernée pour obtenir la page suivante, sans modifier les autres sections. Un curseur invalide, une limite hors bornes ou un paramètre inattendu répondent 400.
@@ -137,7 +163,7 @@ Une migration ajoute l'index `WalletMember(userId, status)` utilisé par ces req
 
 ### Modification d'une dépense
 
-`PATCH /wallets/:walletId/expenses/:expenseId` nécessite un jeton d'accès et
+`PATCH /wallets/:walletId/expenses/:id` nécessite un jeton d'accès et
 accepte un ou deux champs : `title` (chaîne non vide de 100 caractères maximum)
 et `amount` (entier positif en centimes). Seul le payeur peut modifier une
 dépense d'un porte-monnaie ouvert. `date` représente le jour de l'achat et ne
