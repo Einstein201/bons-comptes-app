@@ -1,21 +1,6 @@
-import type { Metadata } from 'next';
-import { AppHeader } from '../../components/AppHeader';
-import { InvitationsPanel } from '../../components/InvitationsPanel';
-import { ProtectedRoute } from '../../components/ProtectedRoute';
-import styles from './page.module.css';
+import { redirect } from 'next/navigation';
 
-export const metadata: Metadata = {
-  title: 'Invitations reçues',
-};
-
-export default function InvitationsPage() {
-  return (
-    <ProtectedRoute>
-      <AppHeader />
-      <main className={styles.main}>
-        <h1>Invitations reçues</h1>
-        <InvitationsPanel />
-      </main>
-    </ProtectedRoute>
-  );
+// Les invitations se gèrent dans l'onglet du tableau de bord : l'ancienne adresse reste valide.
+export default function InvitationsPage(): never {
+  redirect('/?tab=invitations');
 }

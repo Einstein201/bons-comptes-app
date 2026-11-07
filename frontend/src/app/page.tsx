@@ -8,13 +8,21 @@ export const metadata: Metadata = {
   title: 'Mes porte-monnaie',
 };
 
-export default function HomePage() {
+// `tab` permet d'ouvrir directement l'onglet des invitations, par exemple depuis une notification.
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string | string[] }>;
+}) {
+  const { tab } = await searchParams;
+  const initialSection = tab === 'invitations' ? 'invitations' : 'open';
+
   return (
     <ProtectedRoute>
       <div className={styles.page}>
         <AppHeader />
         <div className={styles.content}>
-          <WalletDashboard />
+          <WalletDashboard key={initialSection} initialSection={initialSection} />
         </div>
       </div>
     </ProtectedRoute>

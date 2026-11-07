@@ -72,3 +72,9 @@ export async function acceptInvitation(invitationId: string): Promise<void> {
     throw new Error("La réponse d'acceptation de l'invitation est invalide.");
   }
 }
+
+export async function declineInvitation(invitationId: string): Promise<void> {
+  await apiRequest(`/invitations/${encodeURIComponent(invitationId)}/decline`, {
+    method: 'POST',
+  });
+}

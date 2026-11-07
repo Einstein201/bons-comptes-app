@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ApiError, setAccessToken } from './api';
-import { acceptInvitation, getInvitations, sendInvitation } from './invitations';
+import { acceptInvitation, declineInvitation, getInvitations, sendInvitation } from './invitations';
 
 const fetchMock = vi.fn<typeof fetch>();
 const invitation = {
@@ -62,6 +62,22 @@ it('refuse une réponse d’acceptation incohérente', async () => {
   fetchMock.mockResolvedValue(Response.json({ id: 'other', status: 'MEMBER' }));
 
   await expect(acceptInvitation('invitation-1')).rejects.toThrow('invalide');
+});
+
+it('refuse une invitation avec son identifiant, sans lire de corps de réponse', async () => {
+  fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+  await expect(declineInvitation('invitation/1')).resolves.toBeUndefined();
+
+  const [url, init] = fetchMock.mock.calls[0];
+  expect(String(url)).toBe('http://localhost:3000/invitations/invitation%2F1/decline');
+  expect(init?.method).toBe('POST');
+});
+
+it.each([403, 404, 409])('propage l’erreur %i lors du refus', async (status) => {
+  fetchMock.mockResolvedValue(Response.json({ message: 'Refusé' }, { status }));
+
+  await expect(declineInvitation('invitation-1')).rejects.toMatchObject({ status });
 });
 
 it.each([403, 404, 409])('propage l’erreur %i de l’API', async (status) => {

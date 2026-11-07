@@ -110,7 +110,8 @@ export type WalletListItem = {
   isCreator: boolean;
 };
 
-export type InvitationItem = WalletListItem & { invitedAt: string };
+// `id` reste celui du porte-monnaie ; `invitationId` sert à accepter ou refuser l'invitation.
+export type InvitationItem = WalletListItem & { invitationId: string; invitedAt: string };
 
 export type WalletPage<Item = WalletListItem> = {
   items: Item[];
