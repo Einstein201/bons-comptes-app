@@ -21,6 +21,9 @@ export class CurrentUserResponseDto {
   @ApiProperty({ format: 'uuid' })
   userId: string;
 
+  @ApiProperty({ format: 'email', example: 'alice@example.com' })
+  email: string;
+
   @ApiProperty({ example: 'Alice Martin' })
   name: string;
 }
