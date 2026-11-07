@@ -95,6 +95,32 @@ Pour appeler une route protégée depuis l'interface : exécuter `POST /auth/log
 
 Pour documenter une nouvelle route : `@ApiOperation` pour le résumé, `@ApiOkResponse` ou `@ApiCreatedResponse` pour la réponse, `@ApiErrors` (`src/common/swagger/api-docs.decorators.ts`) pour les erreurs, et `@ApiProperty` sur chaque champ des DTO. `src/swagger.spec.ts` vérifie que chaque route a un résumé, une réponse documentée et la bonne authentification.
 
+## Aperçu des routes
+
+Ce README présente les principaux parcours de l'API. Pour le détail des paramètres,
+permissions, réponses et erreurs, consultez [la documentation Swagger](http://localhost:3000/api/docs),
+disponible lorsque `SWAGGER_ENABLED=true` et que le backend est démarré.
+
+- **Authentification et comptes :** `POST /users`, `POST /auth/login`,
+  `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/change-password`,
+  `GET /auth/me`, `PATCH /users/me`.
+- **Porte-monnaies et bilan :** `POST /wallets`, `GET /wallets`,
+  `GET /wallets/:id`, `POST /wallets/:id/close`,
+  `GET /wallets/:id/balance`, `GET /wallets/:id/optimized-payments`.
+- **Dépenses :** `GET` et `POST /wallets/:walletId/expenses`,
+  `PATCH` et `DELETE /wallets/:walletId/expenses/:id`.
+- **Invitations :** `POST /wallets/:walletId/invitations`,
+  `GET /invitations`, `POST /invitations/:id/accept`,
+  `POST /invitations/:id/decline`,
+  `DELETE /wallets/:walletId/invitations/:id`.
+- **Membres :** `DELETE /wallets/:walletId/members/me` et
+  `DELETE /wallets/:walletId/members/:userId`.
+- **Remboursements :** `GET` et `POST /wallets/:walletId/repayments`,
+  `POST /wallets/:walletId/repayments/:repaymentId/confirm` et
+  `POST /wallets/:walletId/repayments/:repaymentId/cancel`.
+- **Notifications :** `GET /notifications`, `POST /notifications/read-all`,
+  `POST /notifications/:id/read`.
+
 ## API utilisateurs
 
 La route `POST /users` crée un compte. Elle attend un courriel valide, un nom de 1 à 100 caractères et un mot de passe d'au moins 8 caractères (maximum 72 octets pour le hachage bcrypt). Les propriétés inattendues sont rejetées.
