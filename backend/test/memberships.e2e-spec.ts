@@ -248,9 +248,11 @@ describe('Leaving and removing members (e2e)', () => {
     it('keeps a member who has a share of an expense', async () => {
       const walletId = await createWallet();
       const expense = await createExpense(walletId, alice, alice).expect(201);
-      await prisma.expenseSplit.create({
-        data: { expenseId: expense.body.id, userId: carol.id, amount: 1000 },
-      });
+      expect(
+        await prisma.expenseSplit.count({
+          where: { expenseId: expense.body.id, userId: carol.id },
+        }),
+      ).toBe(1);
 
       await removeMember(walletId, carol, alice).expect(409);
     });

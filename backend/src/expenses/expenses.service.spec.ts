@@ -14,7 +14,7 @@ describe('ExpensesService.create', () => {
   let prisma: { $transaction: Mock };
   let transaction: {
     $queryRaw: Mock;
-    walletMember: { findUnique: Mock };
+    walletMember: { findUnique: Mock; findMany: Mock };
     expense: { create: Mock };
     wallet: { update: Mock };
   };
@@ -36,12 +36,15 @@ describe('ExpensesService.create', () => {
         ? { status: 'MEMBER' }
         : null,
     );
+    transaction.walletMember.findMany.mockResolvedValue(
+      memberIds.map((userId) => ({ userId })),
+    );
   }
 
   beforeEach(() => {
     transaction = {
       $queryRaw: vi.fn().mockResolvedValue([{ status: 'OPEN' }]),
-      walletMember: { findUnique: vi.fn() },
+      walletMember: { findUnique: vi.fn(), findMany: vi.fn() },
       expense: { create: vi.fn().mockResolvedValue(createdExpense) },
       wallet: { update: vi.fn() },
     };
@@ -64,8 +67,55 @@ describe('ExpensesService.create', () => {
           date: new Date('2026-10-25T00:00:00.000Z'),
           paidById: 'user-1',
           createdById: 'user-1',
+          splits: {
+            createMany: { data: [{ userId: 'user-1', amount: 4599 }] },
+          },
         },
       }),
+    );
+  });
+
+  it('splits the amount between the accepted members of the wallet only', async () => {
+    givenMembers('user-1', 'user-2', 'user-3');
+
+    await expensesService.create('wallet-1', 'user-1', dto);
+
+    expect(transaction.walletMember.findMany).toHaveBeenCalledWith({
+      where: { walletId: 'wallet-1', status: 'MEMBER' },
+      select: { userId: true },
+    });
+    expect(transaction.expense.create.mock.calls[0][0].data.splits).toEqual({
+      createMany: {
+        data: [
+          { userId: 'user-1', amount: 1533 },
+          { userId: 'user-2', amount: 1533 },
+          { userId: 'user-3', amount: 1533 },
+        ],
+      },
+    });
+  });
+
+  it('gives the remaining cents by ascending user id', async () => {
+    givenMembers('user-3', 'user-1', 'user-2');
+
+    await expensesService.create('wallet-1', 'user-1', { ...dto, amount: 100 });
+
+    expect(transaction.expense.create.mock.calls[0][0].data.splits).toEqual({
+      createMany: {
+        data: [
+          { userId: 'user-1', amount: 34 },
+          { userId: 'user-2', amount: 33 },
+          { userId: 'user-3', amount: 33 },
+        ],
+      },
+    });
+  });
+
+  it('reads the members after locking the wallet', async () => {
+    await expensesService.create('wallet-1', 'user-1', dto);
+
+    expect(transaction.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      transaction.walletMember.findMany.mock.invocationCallOrder[0],
     );
   });
 

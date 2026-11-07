@@ -9,6 +9,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { decodeCursor, encodeCursor } from '../wallets/wallet-pagination.js';
 import type { CreateExpenseDto } from './dto/create-expense.dto.js';
+import { splitEqually } from './expense-split.js';
 import type { ListExpensesQueryDto } from './dto/list-expenses-query.dto.js';
 import type { UpdateExpenseDto } from './dto/update-expense.dto.js';
 
@@ -69,6 +70,16 @@ export class ExpensesService {
         );
       }
 
+      // Les parts figent les membres du moment : une arrivée ultérieure ne change rien.
+      const members = await transaction.walletMember.findMany({
+        where: { walletId, status: 'MEMBER' },
+        select: { userId: true },
+      });
+      const shares = splitEqually(
+        dto.amount,
+        members.map((member) => member.userId),
+      );
+
       const createdExpense = await transaction.expense.create({
         data: {
           walletId,
@@ -77,6 +88,7 @@ export class ExpensesService {
           date: new Date(dto.date),
           paidById,
           createdById: userId,
+          splits: { createMany: { data: shares } },
         },
         select: expenseSelect,
       });
