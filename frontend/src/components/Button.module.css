@@ -27,13 +27,13 @@
 }
 
 .md {
-  height: 44px;
+  height: var(--button-height);
   padding: 0 24px;
   font-size: 14px;
 }
 
 .lg {
-  height: 46px;
+  height: var(--button-height-large);
   padding: 0 20px;
   font-size: 14px;
 }

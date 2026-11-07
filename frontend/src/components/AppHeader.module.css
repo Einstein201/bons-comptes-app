@@ -43,16 +43,14 @@
 }
 
 .brand:focus-visible,
-.logout:focus-visible,
 .login:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 
-.logout,
 .login {
   display: inline-flex;
-  min-height: 40px;
+  min-height: var(--button-height);
   align-items: center;
   justify-content: center;
   padding: 0 16px;
@@ -70,7 +68,7 @@
 .accountButton {
   display: inline-flex;
   max-width: 220px;
-  min-height: 40px;
+  min-height: var(--button-height);
   align-items: center;
   gap: 8px;
   padding: 0 10px 0 6px;
@@ -129,6 +127,10 @@
   background: var(--color-surface-muted);
 }
 
+.menuLogout {
+  color: var(--color-error);
+}
+
 .accountButton:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
@@ -144,7 +146,6 @@
   color: var(--color-primary-strong);
 }
 
-.logout:hover,
 .login:hover {
   background: var(--color-primary-soft);
 }

@@ -80,22 +80,28 @@ export function AppHeader() {
                 <span>{user.name}</span>
               </button>
               {menuOpen ? (
-                <div className={styles.menu}>
+                <div className={styles.menu} role="menu" aria-label="Menu du compte">
                   <button
                     type="button"
+                    role="menuitem"
                     onClick={() => {
                       setMenuOpen(false);
                       setAccountOpen(true);
                     }}
                   >
-                    Informations du compte
+                    Profil
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={styles.menuLogout}
+                    onClick={() => void handleLogout()}
+                  >
+                    Déconnexion
                   </button>
                 </div>
               ) : null}
             </div>
-            <button type="button" className={styles.logout} onClick={handleLogout}>
-              Déconnexion
-            </button>
             {accountOpen ? (
               <AccountInfoModal
                 name={user.name}
