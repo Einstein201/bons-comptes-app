@@ -119,7 +119,7 @@ describe('tableau de bord', () => {
 
     expect(await screen.findByText('Porte-monnaie a')).toBeTruthy();
     expect(mocks.listWallets).toHaveBeenCalledTimes(1);
-    expect(mocks.listWallets).toHaveBeenCalledWith({ limit: 10 });
+    expect(mocks.listWallets).toHaveBeenCalledWith({ limit: 5 });
   });
 
   it('affiche un état vide explicite pour chaque section', async () => {
@@ -141,22 +141,28 @@ describe('tableau de bord', () => {
   it('pagine chaque section avec son propre curseur', async () => {
     mocks.listWallets.mockImplementation(async ({ section, cursor }: { section: string; cursor?: string }) => {
       if (section === 'open' && cursor === 'cursor-open') {
-        return lists({ open: page([wallet('b')], 12) });
+        return lists({ open: page([wallet('f'), wallet('g')], 7) });
       }
       return lists({
-        open: page([wallet('a')], 12, 'cursor-open'),
+        open: page(
+          ['a', 'b', 'c', 'd', 'e'].map((id) => wallet(id)),
+          7,
+          'cursor-open',
+        ),
         closed: page([wallet('c')], 1),
       });
     });
     render(<WalletDashboard />);
 
     expect(await screen.findByText('Porte-monnaie a')).toBeTruthy();
+    expect(screen.getByText('Porte-monnaie e')).toBeTruthy();
+    expect(screen.queryByText('Porte-monnaie f')).toBeNull();
     expect(screen.getByText('Page 1 sur 2')).toBeTruthy();
     const previous = screen.getByRole('button', { name: 'Précédent' }) as HTMLButtonElement;
     expect(previous.disabled).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: 'Suivant' }));
-    expect(await screen.findByText('Porte-monnaie b')).toBeTruthy();
+    expect(await screen.findByText('Porte-monnaie f')).toBeTruthy();
     expect(mocks.listWallets).toHaveBeenCalledWith(
       expect.objectContaining({ section: 'open', cursor: 'cursor-open' }),
     );
@@ -173,6 +179,7 @@ describe('tableau de bord', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Précédent' }));
     expect(await screen.findByText('Porte-monnaie a')).toBeTruthy();
     expect(screen.getByText('Page 1 sur 2')).toBeTruthy();
+    expect(screen.getByText('Porte-monnaie e')).toBeTruthy();
   });
 
   it('affiche une erreur avec un bouton pour réessayer', async () => {
@@ -425,8 +432,14 @@ describe('actions sur les invitations', () => {
     mocks.listWallets.mockImplementation(
       async ({ cursor }: { section?: string; cursor?: string }) =>
         cursor === 'cursor-2'
-          ? lists({ invitations: page([invitation('k'), invitation('l')], 12) })
-          : lists({ invitations: page([invitation('a')], 12, 'cursor-2') }),
+          ? lists({ invitations: page([invitation('k'), invitation('l')], 7) })
+          : lists({
+              invitations: page(
+                ['a', 'b', 'c', 'd', 'e'].map((id) => invitation(id)),
+                7,
+                'cursor-2',
+              ),
+            }),
     );
     await renderInvitations();
     fireEvent.click(screen.getByRole('button', { name: 'Suivant' }));
@@ -440,7 +453,7 @@ describe('actions sur les invitations', () => {
       expect(mocks.listWallets).toHaveBeenLastCalledWith({
         section: 'invitations',
         cursor: 'cursor-2',
-        limit: 10,
+        limit: 5,
       }),
     );
     expect(await screen.findByText('Page 2 sur 2')).toBeTruthy();
