@@ -23,6 +23,8 @@ import styles from './NotificationBell.module.css';
 const PAGE_LIMIT = 10;
 // Actualisation légère, sans websocket : un seul appel qui renvoie aussi le compteur de non lues.
 const POLL_INTERVAL_MS = 30_000;
+const SEEN_NOTIFICATIONS_KEY = 'bons-comptes:seen-notifications';
+const TOAST_DURATION_MS = 7_000;
 
 type LoadStatus = 'loading' | 'ready' | 'error';
 
@@ -41,11 +43,30 @@ export function NotificationBell() {
   const panelRef = useRef<HTMLDivElement>(null);
   // Incrémenté à chaque action locale : une réponse du serveur partie avant ne doit pas l'écraser.
   const generation = useRef(0);
+  const seenIds = useRef(new Set<string>());
+  const openRef = useRef(false);
 
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [status, setStatus] = useState<LoadStatus>('loading');
+  const [toast, setToast] = useState<Notification>();
+
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
+
+  useEffect(() => {
+    try {
+      const stored = window.sessionStorage.getItem(SEEN_NOTIFICATIONS_KEY);
+      const ids: unknown = stored ? JSON.parse(stored) : [];
+      if (Array.isArray(ids)) {
+        seenIds.current = new Set(ids.filter((id): id is string => typeof id === 'string'));
+      }
+    } catch {
+      seenIds.current = new Set();
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     const startedAt = generation.current;
@@ -55,6 +76,22 @@ export function NotificationBell() {
       setItems(page.items);
       setUnreadCount(page.unreadCount);
       setStatus('ready');
+
+      const unseen = page.items.filter(
+        (item) => item.readAt === null && !seenIds.current.has(item.id),
+      );
+      if (unseen.length > 0) {
+        unseen.forEach((item) => seenIds.current.add(item.id));
+        try {
+          window.sessionStorage.setItem(
+            SEEN_NOTIFICATIONS_KEY,
+            JSON.stringify([...seenIds.current].slice(-100)),
+          );
+        } catch {
+          // La notification reste affichée même si le navigateur bloque le stockage de session.
+        }
+        if (!openRef.current) setToast(unseen[0]);
+      }
     } catch {
       // Un échec d'actualisation périodique garde les données déjà affichées.
       setStatus((current) => (current === 'ready' ? current : 'error'));
@@ -68,6 +105,12 @@ export function NotificationBell() {
     }, POLL_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [refresh]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(undefined), TOAST_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   useEffect(() => {
     if (!open) return;
@@ -88,6 +131,7 @@ export function NotificationBell() {
 
   function toggle() {
     if (!open) {
+      setToast(undefined);
       if (status !== 'ready') setStatus('loading');
       void refresh();
     }
@@ -111,6 +155,7 @@ export function NotificationBell() {
 
   function handleSelect(notification: Notification) {
     setOpen(false);
+    setToast(undefined);
 
     if (!notification.readAt) {
       generation.current += 1;
@@ -128,6 +173,7 @@ export function NotificationBell() {
 
   function handleMarkAllRead() {
     generation.current += 1;
+    setToast(undefined);
     const readAt = new Date().toISOString();
     setItems((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? readAt })));
     setUnreadCount(0);
@@ -165,6 +211,24 @@ export function NotificationBell() {
           </span>
         ) : null}
       </button>
+
+      {toast ? (
+        <div className={styles.toast} role="status" aria-live="polite">
+          <p className={styles.toastMessage}>{toast.message}</p>
+          <div className={styles.toastActions}>
+            <button type="button" className={styles.toastButton} onClick={toggle}>
+              Voir les notifications
+            </button>
+            <button
+              type="button"
+              className={styles.toastButton}
+              onClick={() => setToast(undefined)}
+            >
+              Fermer
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {open ? (
         <div id={panelId} ref={panelRef} role="dialog" aria-label="Notifications" tabIndex={-1} className={styles.panel}>
