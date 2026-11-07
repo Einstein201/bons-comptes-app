@@ -54,6 +54,9 @@ jobs:
           test -f package-lock.json
           npm ci
 
+      - name: Audit backend dependencies
+        run: npm audit
+
       - name: Validate Prisma schema
         run: npx prisma validate
         env:
