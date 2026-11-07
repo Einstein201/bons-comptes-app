@@ -12,7 +12,7 @@ import { getWallet, type WalletDetails } from '../services/wallets';
 import { Button } from './Button';
 import { RepaymentsPanel } from './RepaymentsPanel';
 import {
-  WALLET_PANEL_ID, WalletTabProvider, WalletTabs, tabId, type WalletTabId,
+  WALLET_PANEL_ID, WalletClosedProvider, WalletTabProvider, WalletTabs, tabId, type WalletTabId,
 } from './WalletTabs';
 import styles from './WalletBalance.module.css';
 
@@ -113,6 +113,13 @@ export function WalletBalance({ walletId, children }: { walletId: string; childr
     setRevision((value) => value + 1);
   }
 
+  // Une action du détail a été refusée car le porte-monnaie est clôturé : on relit son statut.
+  function handleWalletClosed(message: string) {
+    setNotice(message);
+    setSelectedTab('expenses');
+    refresh();
+  }
+
   async function refreshFinancial() {
     const [balance, plan] = await Promise.all([
       getWalletBalance(walletId),
@@ -187,7 +194,9 @@ export function WalletBalance({ walletId, children }: { walletId: string; childr
         {actionError && <p className={styles.error} role="alert">{actionError}</p>}
         <WalletTabs tabs={tabs} active={tab} onChange={setSelectedTab} />
         <div role="tabpanel" id={WALLET_PANEL_ID} aria-labelledby={tabId(tab)} className={styles.panel}>
-        <WalletTabProvider value={tab}>{children}</WalletTabProvider>
+        <WalletClosedProvider value={handleWalletClosed}>
+          <WalletTabProvider value={tab}>{children}</WalletTabProvider>
+        </WalletClosedProvider>
         {tab === 'closure' && wallet.status === 'OPEN' && (
             <section className={styles.card}>
               <h2>Clôture du porte-monnaie</h2>
