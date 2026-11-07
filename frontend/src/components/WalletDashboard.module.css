@@ -214,9 +214,47 @@
 
 .invitationText {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+}
+
+.invitationActions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 24px 0;
+  padding: 12px 16px;
+  border: 1px solid;
+  border-radius: var(--radius-control);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.notice:focus {
+  outline: none;
+}
+
+.success {
+  border-color: var(--color-success-border);
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.error {
+  border-color: var(--color-error-border);
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .meta {
@@ -320,6 +358,19 @@
   .creator,
   .date {
     grid-column: 1;
+    padding-left: 60px;
+  }
+
+  .invitation {
+    flex-wrap: wrap;
+  }
+
+  .invitationText {
+    flex-basis: calc(100% - 60px);
+  }
+
+  .invitationActions {
+    width: 100%;
     padding-left: 60px;
   }
 }
