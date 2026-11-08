@@ -54,6 +54,7 @@ async function renderBell() {
 }
 
 beforeEach(() => {
+  sessionStorage.clear();
   mocks.getNotifications.mockReset();
   mocks.markNotificationRead.mockReset();
   mocks.markAllNotificationsRead.mockReset();
@@ -146,6 +147,44 @@ describe('menu', () => {
 
     await waitFor(() => expect(screen.queryByText(/Alice vous a invité/)).toBeNull());
     expect(mocks.getNotifications).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('notification automatique', () => {
+  it('affiche un toast pour les notifications non lues dès le chargement', async () => {
+    await renderBell();
+
+    expect(screen.getByRole('status').textContent).toContain(invitation.message);
+  });
+
+  it('ouvre le panneau depuis le toast', async () => {
+    await renderBell();
+    fireEvent.click(screen.getByRole('button', { name: 'Voir les notifications' }));
+
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Notifications' })).toBeTruthy();
+  });
+
+  it('ne réaffiche pas les mêmes notifications après un changement de page', async () => {
+    await renderBell();
+    expect(screen.getByRole('status').textContent).toContain(invitation.message);
+    cleanup();
+
+    await renderBell();
+
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('masque automatiquement le toast après quelques secondes', async () => {
+    vi.useFakeTimers();
+    await renderBell();
+    expect(screen.getByRole('status')).toBeTruthy();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(7_000);
+    });
+
+    expect(screen.queryByRole('status')).toBeNull();
   });
 });
 
