@@ -7,6 +7,7 @@ import { AppHeader } from './AppHeader';
 const mocks = vi.hoisted(() => ({
   useAuth: vi.fn(),
   replace: vi.fn(),
+  pathname: '/',
 }));
 
 vi.mock('../contexts/AuthContext', () => ({
@@ -15,6 +16,7 @@ vi.mock('../contexts/AuthContext', () => ({
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.replace }),
+  usePathname: () => mocks.pathname,
 }));
 
 vi.mock('./NotificationBell', () => ({
@@ -34,6 +36,7 @@ describe('AppHeader', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    mocks.pathname = '/';
   });
 
   it('ouvre le menu avec Profil et Déconnexion, puis le profil', () => {
@@ -66,6 +69,7 @@ describe('AppHeader', () => {
     });
     render(<AppHeader />);
 
+    expect(screen.queryByRole('button', { name: 'Déconnexion' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Alice' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Déconnexion' }));
 
@@ -91,5 +95,20 @@ describe('AppHeader', () => {
     fireEvent.click(accountButton);
     fireEvent.mouseDown(document.body);
     expect(screen.queryByRole('menuitem', { name: 'Profil' })).toBeNull();
+  });
+
+  it('masque le lien de connexion sur /login mais le garde sur /register', () => {
+    mocks.useAuth.mockReturnValue({ status: 'unauthenticated' });
+    mocks.pathname = '/login';
+    const { unmount } = render(<AppHeader />);
+
+    expect(screen.queryByRole('link', { name: 'Connexion' })).toBeNull();
+
+    unmount();
+    mocks.pathname = '/register';
+    render(<AppHeader />);
+
+    expect(screen.getByRole('link', { name: 'Connexion' }).getAttribute('href'))
+      .toBe('/login');
   });
 });

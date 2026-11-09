@@ -122,8 +122,16 @@ describe('formulaires d’authentification', () => {
     expect((screen.getByLabelText(/^Mot de passe/) as HTMLInputElement).minLength).toBe(8);
   });
 
-  it('n’affiche pas l’accroche supprimée sur la page de connexion', () => {
+  it('masque l’accroche de connexion', () => {
     render(<AuthForm mode="login" />);
-    expect(screen.queryByText('Ravi de vous revoir')).toBeNull();
+    expect(
+      screen.queryByText('Connectez-vous pour retrouver vos porte-monnaies.'),
+    ).toBeNull();
+  });
+
+  it('masque le surtitre de création de compte', () => {
+    render(<AuthForm mode="register" />);
+    expect(screen.queryByText('Créer un compte')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Inscription' })).not.toBeNull();
   });
 });

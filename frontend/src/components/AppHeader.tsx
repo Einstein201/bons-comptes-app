@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { ApiError } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,6 +12,7 @@ import styles from './AppHeader.module.css';
 
 export function AppHeader() {
   const { status, signOut, user, updateName } = useAuth();
+  const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -111,7 +112,8 @@ export function AppHeader() {
               />
             ) : null}
           </>
-        ) : status === 'unauthenticated' || status === 'signed-out' ? (
+        ) : (status === 'unauthenticated' || status === 'signed-out') &&
+          pathname !== '/login' ? (
           <Link className={styles.login} href="/login">Connexion</Link>
         ) : null}
       </div>

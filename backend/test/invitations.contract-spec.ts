@@ -814,6 +814,24 @@ describe('IF-13 — contrat HTTP des invitations (UC04 et UC05)', () => {
       });
     });
 
+    it('permet de renvoyer une invitation après son refus', async () => {
+      const firstInvitation = await sendInvitation().expect(201);
+
+      await declineInvitation(firstInvitation.body.id).expect(204);
+      expect(await findMembership()).toBeNull();
+
+      const resentInvitation = await sendInvitation().expect(201);
+
+      expect(resentInvitation.body.id).not.toBe(firstInvitation.body.id);
+      expect(await findMembership()).toMatchObject({
+        id: resentInvitation.body.id,
+        userId: invitee.id,
+        walletId: wallet.id,
+        status: 'INVITED',
+        acceptedAt: null,
+      });
+    });
+
     it.each(['creator', 'otherUser'] as const)(
       'refuse le refus par %s sans modifier l’invitation (403)',
       async (actor) => {
