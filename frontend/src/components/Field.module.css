@@ -16,6 +16,12 @@
   font-weight: 400;
 }
 
+.requiredMarker {
+  margin-left: 4px;
+  color: var(--color-error);
+  font-weight: 700;
+}
+
 .control {
   width: 100%;
   height: 46px;

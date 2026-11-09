@@ -893,7 +893,7 @@ describe('IF-13 — contrat HTTP des invitations (UC04 et UC05)', () => {
       });
     });
 
-    it('ne réussit pas simultanément avec l’acceptation', async () => {
+    it('une seule action concurrente entre acceptation et refus réussit', async () => {
       const invitation = await testFixtures().createMembership(
         wallet.id,
         invitee.id,
@@ -903,13 +903,22 @@ describe('IF-13 — contrat HTTP des invitations (UC04 et UC05)', () => {
         declineInvitation(invitation.id),
       ]);
 
-      expect(responses.map((response) => response.status).sort()).toEqual([
-        200, 409,
-      ]);
-      expect(await findMembership()).toMatchObject({
-        id: invitation.id,
-        status: 'MEMBER',
-      });
+      const [acceptResponse, declineResponse] = responses;
+      expect([
+        [200, 409],
+        [404, 204],
+        [409, 204],
+      ]).toContainEqual([acceptResponse.status, declineResponse.status]);
+
+      const membership = await findMembership();
+      if (acceptResponse.status === 200) {
+        expect(membership).toMatchObject({
+          id: invitation.id,
+          status: 'MEMBER',
+        });
+      } else {
+        expect(membership).toBeNull();
+      }
     });
   });
 

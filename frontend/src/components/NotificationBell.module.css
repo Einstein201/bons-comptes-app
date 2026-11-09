@@ -6,8 +6,8 @@
   position: relative;
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: var(--button-height);
+  height: var(--button-height);
   padding: 0;
   border: 1px solid var(--color-hairline);
   border-radius: 50%;
@@ -50,15 +50,15 @@
 
 .toast {
   position: fixed;
-  top: 72px;
-  right: 24px;
+  top: 76px;
+  right: max(16px, calc((100vw - 1000px) / 2));
   z-index: 40;
   display: grid;
   gap: 12px;
   width: min(360px, calc(100vw - 32px));
   padding: 16px;
   border: 1px solid var(--color-card-border);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-control);
   background: var(--color-bg);
   color: var(--color-text);
   box-shadow: 0 12px 40px rgba(36, 31, 35, 0.16);

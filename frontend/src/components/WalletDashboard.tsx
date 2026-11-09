@@ -26,7 +26,7 @@ import {
 } from './icons';
 import styles from './WalletDashboard.module.css';
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 5;
 
 // Ces refus signifient que la ligne affichée est périmée : retirée, déjà traitée ou clôturée.
 const STALE_INVITATION_STATUSES = new Set([403, 404, 409]);

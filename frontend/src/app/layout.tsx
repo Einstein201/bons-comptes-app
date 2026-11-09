@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import type { ReactNode } from 'react';
 import { AuthProvider } from '../contexts/AuthContext';
+import { AppFooter } from '../components/AppFooter';
+import styles from './AppFrame.module.css';
 import './globals.css';
 
 const inter = Inter({
@@ -27,7 +29,12 @@ export default function RootLayout({
   return (
     <html lang="fr" className={inter.variable}>
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <div className={styles.shell}>
+            <div className={styles.content}>{children}</div>
+            <AppFooter />
+          </div>
+        </AuthProvider>
       </body>
     </html>
   );

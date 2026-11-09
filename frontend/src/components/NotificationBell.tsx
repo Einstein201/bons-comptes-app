@@ -88,7 +88,7 @@ export function NotificationBell() {
             JSON.stringify([...seenIds.current].slice(-100)),
           );
         } catch {
-          // La notification reste affichée même si le navigateur bloque le stockage de session.
+          // La notification reste visible même si le stockage de session est indisponible.
         }
         if (!openRef.current) setToast(unseen[0]);
       }
@@ -103,7 +103,14 @@ export function NotificationBell() {
     const timer = setInterval(() => {
       if (document.visibilityState === 'visible') void refresh();
     }, POLL_INTERVAL_MS);
-    return () => clearInterval(timer);
+    function refreshWhenVisible() {
+      if (document.visibilityState === 'visible') void refresh();
+    }
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
   }, [refresh]);
 
   useEffect(() => {

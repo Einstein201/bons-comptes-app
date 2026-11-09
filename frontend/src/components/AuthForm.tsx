@@ -101,7 +101,9 @@ export function AuthForm({ mode }: AuthFormProps) {
   return (
     <section className={styles.card}>
       <header className={styles.header}>
-        <h1>{isRegister ? 'Inscription' : 'Connexion'}</h1>
+        <h1 className={isRegister ? styles.registerTitle : undefined}>
+          {isRegister ? 'Inscription' : 'Connexion'}
+        </h1>
         {isRegister ? (
           <p>Rejoignez vos proches pour partager les dépenses simplement.</p>
         ) : null}

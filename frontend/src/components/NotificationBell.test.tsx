@@ -151,7 +151,7 @@ describe('menu', () => {
 });
 
 describe('notification automatique', () => {
-  it('affiche un toast pour les notifications non lues dès le chargement', async () => {
+  it('affiche un toast pour une notification non lue au chargement', async () => {
     await renderBell();
 
     expect(screen.getByRole('status').textContent).toContain(invitation.message);
@@ -159,13 +159,14 @@ describe('notification automatique', () => {
 
   it('ouvre le panneau depuis le toast', async () => {
     await renderBell();
+
     fireEvent.click(screen.getByRole('button', { name: 'Voir les notifications' }));
 
     expect(screen.queryByRole('status')).toBeNull();
     expect(screen.getByRole('dialog', { name: 'Notifications' })).toBeTruthy();
   });
 
-  it('ne réaffiche pas les mêmes notifications après un changement de page', async () => {
+  it('ne réaffiche pas la même notification après une navigation dans le même onglet', async () => {
     await renderBell();
     expect(screen.getByRole('status').textContent).toContain(invitation.message);
     cleanup();
@@ -175,7 +176,7 @@ describe('notification automatique', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
 
-  it('masque automatiquement le toast après quelques secondes', async () => {
+  it('masque automatiquement le toast après sept secondes', async () => {
     vi.useFakeTimers();
     await renderBell();
     expect(screen.getByRole('status')).toBeTruthy();
@@ -185,6 +186,24 @@ describe('notification automatique', () => {
     });
 
     expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('actualise les notifications dès que l’onglet redevient visible', async () => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'hidden',
+    });
+    await renderBell();
+    mocks.getNotifications.mockResolvedValue(page([invitation, repayment], 2));
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible',
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    await waitFor(() => expect(mocks.getNotifications).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole('button', { name: 'Notifications, 2 non lues' })).toBeTruthy();
   });
 });
 
@@ -353,6 +372,28 @@ describe('actualisation périodique', () => {
 
     expect(mocks.getNotifications).toHaveBeenCalledTimes(2);
     expect(bell().textContent).toBe('4');
+  });
+
+  it('affiche un toast quand une nouvelle notification arrive au polling', async () => {
+    vi.useFakeTimers();
+    await renderBell();
+    const newNotification = {
+      ...invitation,
+      id: 'n-new-invitation',
+      message: 'Chloé vous a invité à Weekend à Québec',
+      createdAt: new Date().toISOString(),
+    };
+    mocks.getNotifications.mockResolvedValue(
+      page([newNotification, invitation], 2),
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+
+    expect(screen.getByRole('status').textContent).toContain(
+      'Chloé vous a invité à Weekend à Québec',
+    );
   });
 
   it('arrête d’interroger le serveur quand le composant disparaît', async () => {

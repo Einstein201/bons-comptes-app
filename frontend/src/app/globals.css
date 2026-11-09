@@ -37,6 +37,9 @@
 
   --radius-control: 12px;
   --radius-card: 24px;
+
+  --button-height: 44px;
+  --button-height-large: 48px;
 }
 
 * {
