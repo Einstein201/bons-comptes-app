@@ -297,6 +297,20 @@ describe('AuthService', () => {
     });
   });
 
+  it('utilise le chemin du cookie défini par REFRESH_COOKIE_PATH', () => {
+    vi.stubEnv('REFRESH_COOKIE_PATH', '/api/auth');
+    const res = { cookie: vi.fn() };
+
+    service.setRefreshCookie(res as unknown as Response, 'tok');
+
+    expect(res.cookie).toHaveBeenCalledWith(
+      REFRESH_COOKIE,
+      'tok',
+      expect.objectContaining({ path: '/api/auth' }),
+    );
+    vi.unstubAllEnvs();
+  });
+
   it('setRefreshCookie pose un cookie httpOnly de 7 jours', () => {
     const res = { cookie: vi.fn() };
 
