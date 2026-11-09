@@ -104,11 +104,9 @@ export function AuthForm({ mode }: AuthFormProps) {
         <h1 className={isRegister ? styles.registerTitle : undefined}>
           {isRegister ? 'Inscription' : 'Connexion'}
         </h1>
-        <p>
-          {isRegister
-            ? 'Rejoignez vos proches pour partager les dépenses simplement.'
-            : 'Connectez-vous pour retrouver vos porte-monnaies.'}
-        </p>
+        {isRegister ? (
+          <p>Rejoignez vos proches pour partager les dépenses simplement.</p>
+        ) : null}
       </header>
 
       {registered ? (
