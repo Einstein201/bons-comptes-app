@@ -1,4 +1,4 @@
-# Les Bons Comptes — Backend (NestJS + Prisma)
+# Les Bons Comptes - Backend (NestJS + Prisma)
 
 Application full-stack de gestion et de partage de dépenses entre amis et portefeuilles partagés, développée dans le cadre du module **IF**.
 
@@ -80,6 +80,11 @@ JWT_REFRESH_SECRET=your_generated_refresh_secret
 `JWT_SECRET` signe les jetons d'accès. `JWT_REFRESH_SECRET` signe et vérifie les jetons de renouvellement.
 
 Limite connue : les jetons de renouvellement individuels ne sont pas stockés côté serveur. `POST /auth/refresh` émet un nouveau jeton sans invalider l'ancien, qui reste réutilisable jusqu'à son expiration (7 jours). `POST /auth/logout` efface le cookie du navigateur, mais ne révoque pas une copie du jeton. Un changement de mot de passe invalide les anciens jetons de renouvellement. La révocation dédiée à la déconnexion (`jti`) reste à implémenter.
+
+Le cookie du refresh token est envoyé sur le chemin `/auth`. Derrière le proxy
+`/api` du frontend (déploiement), définissez `REFRESH_COOKIE_PATH=/api/auth`.
+En local, laissez la valeur par défaut.
+
 Ne commitez pas `.env` et ne partagez pas les secrets.
 
 ## Documentation de l'API (Swagger)
@@ -186,6 +191,32 @@ npm run start:prod
 ```
 
 L'application sera accessible à l'adresse : `http://localhost:3000`.
+
+---
+
+##  Déploiement (Google Cloud Run)
+
+Le backend de démo tourne sur Cloud Run, construit à partir du `Dockerfile`
+de ce dossier. La base de démo est un projet Neon séparé : ne jamais utiliser
+la base `production`.
+
+Les variables (`DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `JWT_SECRET`,
+`JWT_REFRESH_SECRET`, `REFRESH_COOKIE_PATH=/api/auth`, `FRONTEND_URL`) sont
+fournies à Cloud Run par un fichier YAML gardé hors du dépôt.
+
+Mettre en ligne une nouvelle version, depuis `backend/`, avec un `git status` propre :
+
+1. Si de nouvelles migrations existent, les appliquer d'abord sur la base de démo
+   (`npx prisma migrate deploy` avec les adresses de la base de démo).
+2. Déployer :
+
+```bash
+gcloud run deploy bons-comptes-api --source . --region europe-west1 --allow-unauthenticated --memory 512Mi --min-instances 0 --max-instances 2 --env-vars-file ~/bons-comptes-cloudrun.yaml
+```
+
+3. Vérifier que `GET /health` répond `{"status":"ok"}`.
+
+Tester l'image en local (facultatif) : `docker build -t bons-comptes-backend .`
 
 ---
 
