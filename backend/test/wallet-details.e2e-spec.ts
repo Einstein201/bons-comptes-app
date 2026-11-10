@@ -105,6 +105,7 @@ describe('Wallet details (e2e)', () => {
         description: 'Dépenses du voyage',
         status: 'OPEN',
         createdAt: expect.any(String),
+        isCreator: true,
       },
       members: {
         items: [
@@ -135,6 +136,25 @@ describe('Wallet details (e2e)', () => {
 
     expect(JSON.stringify(response.body)).not.toContain('password');
     expect(JSON.stringify(response.body)).not.toContain('motdepasse123');
+    expect(response.body.wallet).not.toHaveProperty('createdById');
+  });
+
+  it('identifies an accepted member who is not the creator', async () => {
+    await prisma.walletMember.update({
+      where: { walletId_userId: { walletId, userId: bob.id } },
+      data: { status: 'MEMBER', acceptedAt: new Date() },
+    });
+
+    try {
+      const response = await getWallet(walletId, bob.token).expect(200);
+      expect(response.body.wallet.isCreator).toBe(false);
+      expect(response.body.wallet).not.toHaveProperty('createdById');
+    } finally {
+      await prisma.walletMember.update({
+        where: { walletId_userId: { walletId, userId: bob.id } },
+        data: { status: 'INVITED', acceptedAt: null },
+      });
+    }
   });
 
   it('lets a member read a closed wallet', async () => {

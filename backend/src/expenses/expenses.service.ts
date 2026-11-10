@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -9,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { decodeCursor, encodeCursor } from '../wallets/wallet-pagination.js';
 import type { CreateExpenseDto } from './dto/create-expense.dto.js';
 import type { ListExpensesQueryDto } from './dto/list-expenses-query.dto.js';
+import type { UpdateExpenseDto } from './dto/update-expense.dto.js';
 
 const expenseSelect = {
   id: true,
@@ -133,19 +135,24 @@ export class ExpensesService {
 
   async remove(walletId: string, expenseId: string, userId: string) {
     await this.prisma.$transaction(async (transaction) => {
+      const lockedWallets = await transaction.$queryRaw<{ status: string }[]>`
+        SELECT "status" FROM "Wallet" WHERE "id" = ${walletId} FOR UPDATE`;
+      const wallet = lockedWallets[0];
+
+      if (!wallet) {
+        throw new NotFoundException('Porte-monnaie introuvable.');
+      }
+
       const expense = await transaction.expense.findFirst({
         where: { id: expenseId, walletId },
-        select: {
-          paidById: true,
-          wallet: { select: { status: true } },
-        },
+        select: { paidById: true },
       });
 
       if (!expense) {
         throw new NotFoundException('Dépense introuvable.');
       }
 
-      if (expense.wallet.status !== 'OPEN') {
+      if (wallet.status !== 'OPEN') {
         throw new ConflictException('Ce porte-monnaie est fermé.');
       }
 
@@ -162,6 +169,84 @@ export class ExpensesService {
         data: { updatedAt: new Date() },
       });
     });
+  }
+
+  async update(
+    walletId: string,
+    expenseId: string,
+    userId: string,
+    dto: UpdateExpenseDto,
+  ) {
+    if (
+      dto.title === undefined &&
+      dto.amount === undefined
+    ) {
+      throw new BadRequestException(
+        'Au moins un champ modifiable doit être fourni.',
+      );
+    }
+
+    const expense = await this.prisma.$transaction(async (transaction) => {
+      const lockedWallets = await transaction.$queryRaw<{ status: string }[]>`
+        SELECT "status" FROM "Wallet" WHERE "id" = ${walletId} FOR UPDATE`;
+      const wallet = lockedWallets[0];
+
+      if (!wallet) {
+        throw new NotFoundException('Porte-monnaie introuvable.');
+      }
+
+      const existing = await transaction.expense.findFirst({
+        where: { id: expenseId, walletId },
+        select: {
+          paidById: true,
+          amount: true,
+          _count: { select: { splits: true } },
+        },
+      });
+
+      if (!existing) {
+        throw new NotFoundException('Dépense introuvable.');
+      }
+
+      if (wallet.status !== 'OPEN') {
+        throw new ConflictException('Ce porte-monnaie est fermé.');
+      }
+
+      if (existing.paidById !== userId) {
+        throw new ForbiddenException(
+          'Seul le payeur peut modifier cette dépense.',
+        );
+      }
+
+      if (
+        dto.amount !== undefined &&
+        dto.amount !== existing.amount &&
+        existing._count.splits > 0
+      ) {
+        throw new ConflictException(
+          'Le montant ne peut pas être modifié car la dépense possède déjà une répartition.',
+        );
+      }
+
+      const data = {
+        ...(dto.title !== undefined ? { title: dto.title } : {}),
+        ...(dto.amount !== undefined ? { amount: dto.amount } : {}),
+      };
+      const updatedExpense = await transaction.expense.update({
+        where: { id: expenseId },
+        data,
+        select: expenseSelect,
+      });
+
+      await transaction.wallet.update({
+        where: { id: walletId },
+        data: { updatedAt: new Date() },
+      });
+
+      return updatedExpense;
+    });
+
+    return toExpenseItem(expense);
   }
 
   private async findWalletOfMember(walletId: string, userId: string) {

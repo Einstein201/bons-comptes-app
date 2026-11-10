@@ -27,7 +27,9 @@ export function Field({ label, hint, error, children }: FieldProps) {
     <div className={styles.field}>
       <label htmlFor={id} className={styles.label}>
         {label}
-        {hint ? <span className={styles.hint}> ({hint})</span> : null}
+        {hint === 'obligatoire' ? (
+          <span className={styles.requiredMarker} aria-hidden="true">*</span>
+        ) : hint ? <span className={styles.hint}> ({hint})</span> : null}
       </label>
       {children({
         id,

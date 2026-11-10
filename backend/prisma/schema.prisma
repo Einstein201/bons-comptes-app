@@ -24,11 +24,17 @@ enum RepaymentStatus {
   CANCELLED
 }
 
+enum NotificationType {
+  INVITATION_RECEIVED
+  REPAYMENT_CONFIRMED
+}
+
 model User {
   id                 String         @id @default(uuid())
   email              String         @unique
   name               String
   password           String
+  sessionVersion     Int            @default(0)
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
   walletMemberships  WalletMember[]
@@ -38,6 +44,7 @@ model User {
   splits             ExpenseSplit[]
   sentRepayments     Repayment[]    @relation("RepaymentSender")
   receivedRepayments Repayment[]    @relation("RepaymentRecipient")
+  notifications      Notification[]
 }
 
 model Wallet {
@@ -109,4 +116,19 @@ model Repayment {
   toUser     User            @relation("RepaymentRecipient", fields: [toUserId], references: [id], onDelete: Restrict)
 
   @@index([walletId, status])
+}
+
+// walletId est volontairement sans clé étrangère : supprimer un porte-monnaie ne doit pas casser les notifications déjà reçues.
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  message   String
+  walletId  String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([userId, readAt])
 }

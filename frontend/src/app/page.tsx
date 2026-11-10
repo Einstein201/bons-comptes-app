@@ -1,17 +1,30 @@
-import Link from 'next/link';
+import type { Metadata } from 'next';
+import { AppHeader } from '../components/AppHeader';
+import { ProtectedRoute } from '../components/ProtectedRoute';
+import { WalletDashboard } from '../components/WalletDashboard';
+import styles from './dashboard-page.module.css';
 
-export default function HomePage() {
+export const metadata: Metadata = {
+  title: 'Mes porte-monnaie',
+};
+
+// `tab` permet d'ouvrir directement l'onglet des invitations, par exemple depuis une notification.
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string | string[] }>;
+}) {
+  const { tab } = await searchParams;
+  const initialSection = tab === 'invitations' ? 'invitations' : 'open';
+
   return (
-    <main>
-      <h1>Les Bons Comptes</h1>
-      <p>On partage les bons moments ... </p>
-      <nav aria-label="Compte">
-        <Link href="/login">Se connecter</Link>
-        {' · '}
-        <Link href="/register">Créer un compte</Link>
-        {' · '}
-        <Link href="/wallets/new">Créer un porte-monnaie</Link>
-      </nav>
-    </main>
+    <ProtectedRoute>
+      <div className={styles.page}>
+        <AppHeader />
+        <div className={styles.content}>
+          <WalletDashboard key={initialSection} initialSection={initialSection} />
+        </div>
+      </div>
+    </ProtectedRoute>
   );
 }

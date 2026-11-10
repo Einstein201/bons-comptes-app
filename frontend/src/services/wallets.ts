@@ -1,10 +1,13 @@
 import { apiRequest } from './api';
+import { isDateString, isNonEmptyString, isRecord } from './api-contract';
+
+export type WalletStatus = 'OPEN' | 'CLOSED';
 
 export type Wallet = {
   id: string;
   title: string;
   description: string | null;
-  status: 'OPEN';
+  status: WalletStatus;
   createdAt: string;
 };
 
@@ -12,6 +15,75 @@ export type CreateWalletInput = {
   title: string;
   description?: string;
 };
+
+export type WalletDetails = {
+  wallet: Omit<Wallet, 'status'> & {
+    status: 'OPEN' | 'CLOSED';
+    isCreator: boolean;
+  };
+  members: {
+    items: WalletMember[];
+    nextCursor: string | null;
+  };
+};
+
+export type WalletMember = {
+  userId: string;
+  name: string;
+  email: string;
+  status: 'INVITED' | 'MEMBER';
+  invitedAt: string;
+  acceptedAt: string | null;
+};
+
+// Le porte-monnaie avec tous ses membres (toutes les pages réunies).
+export type WalletWithMembers = {
+  wallet: WalletDetails['wallet'];
+  members: WalletMember[];
+};
+
+const MEMBERS_PAGE_LIMIT = 100;
+
+function isWalletMember(value: unknown): value is WalletMember {
+  return isRecord(value) &&
+      isNonEmptyString(value.userId) &&
+      typeof value.name === 'string' &&
+      typeof value.email === 'string' &&
+      (value.status === 'INVITED' || value.status === 'MEMBER') &&
+      isDateString(value.invitedAt) &&
+      (value.acceptedAt === null || isDateString(value.acceptedAt));
+}
+
+function isWalletDetails(value: unknown, walletId: string): value is WalletDetails {
+  if (!isRecord(value) || !isRecord(value.wallet) || !isRecord(value.members)) {
+    return false;
+  }
+  const { wallet, members } = value;
+  return wallet.id === walletId &&
+      typeof wallet.title === 'string' &&
+      (wallet.description === null || typeof wallet.description === 'string') &&
+      (wallet.status === 'OPEN' || wallet.status === 'CLOSED') &&
+      typeof wallet.isCreator === 'boolean' &&
+      isDateString(wallet.createdAt) &&
+      Array.isArray(members.items) && members.items.every(isWalletMember) &&
+      (members.nextCursor === null || isNonEmptyString(members.nextCursor));
+}
+
+export async function getWallet(
+    walletId: string,
+    query: { limit?: number; cursor?: string } = {},
+): Promise<WalletDetails> {
+  const params = new URLSearchParams();
+  if (query.limit !== undefined) params.set('limit', String(query.limit));
+  if (query.cursor !== undefined) params.set('cursor', query.cursor);
+  const suffix = params.size ? `?${params}` : '';
+  const response = await apiRequest(`/wallets/${encodeURIComponent(walletId)}${suffix}`);
+  const body: unknown = await response.json();
+  if (!isWalletDetails(body, walletId)) {
+    throw new Error('La réponse du détail du porte-monnaie est invalide.');
+  }
+  return body;
+}
 
 // POST /wallets n'accepte que title et description : le créateur est l'utilisateur authentifié.
 export async function createWallet(input: CreateWalletInput): Promise<Wallet> {
@@ -22,4 +94,66 @@ export async function createWallet(input: CreateWalletInput): Promise<Wallet> {
   });
 
   return (await response.json()) as Wallet;
+}
+
+export type WalletSection = 'open' | 'closed' | 'invitations';
+
+export type WalletListItem = {
+  id: string;
+  title: string;
+  description: string | null;
+  status: 'OPEN' | 'CLOSED';
+  createdAt: string;
+  updatedAt: string;
+  closedAt: string | null;
+  creatorName: string;
+  isCreator: boolean;
+};
+
+// `id` reste celui du porte-monnaie ; `invitationId` sert à accepter ou refuser l'invitation.
+export type InvitationItem = WalletListItem & { invitationId: string; invitedAt: string };
+
+export type WalletPage<Item = WalletListItem> = {
+  items: Item[];
+  nextCursor: string | null;
+  total: number;
+};
+
+export type WalletLists = {
+  open: WalletPage;
+  closed: WalletPage;
+  invitations: WalletPage<InvitationItem>;
+};
+
+const CURSOR_PARAMS: Record<WalletSection, string> = {
+  open: 'openCursor',
+  closed: 'closedCursor',
+  invitations: 'invitationsCursor',
+};
+
+export const DEFAULT_PAGE_SIZE = 10;
+
+// Chaque section a son curseur : en n'envoyant que celui de la section visée, les autres restent à leur première page.
+export async function listWallets(
+  options: { section?: WalletSection; cursor?: string; limit?: number } = {},
+): Promise<WalletLists> {
+  const { section, cursor, limit = DEFAULT_PAGE_SIZE } = options;
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (section && cursor) params.set(CURSOR_PARAMS[section], cursor);
+
+  const response = await apiRequest(`/wallets?${params}`);
+  return (await response.json()) as WalletLists;
+}
+
+// Les membres sont paginés : on appelle getWallet jusqu'à la dernière page.
+export async function getWalletDetails(walletId: string): Promise<WalletWithMembers> {
+  let page = await getWallet(walletId, { limit: MEMBERS_PAGE_LIMIT });
+  const members = [...page.members.items];
+
+  while (page.members.nextCursor) {
+    page = await getWallet(walletId, { limit: MEMBERS_PAGE_LIMIT, cursor: page.members.nextCursor });
+    members.push(...page.members.items);
+  }
+
+  return { wallet: page.wallet, members };
 }

@@ -92,3 +92,9 @@
     padding: 16px 20px;
   }
 }
+
+.successLink {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}

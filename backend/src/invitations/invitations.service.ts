@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { notifyInvitationReceived } from '../notifications/notification-factory.js';
 import { decodeCursor, encodeCursor } from '../wallets/wallet-pagination.js';
 import type { CreateInvitationDto } from './dto/create-invitation.dto.js';
 import type { ListInvitationsQueryDto } from './dto/list-invitations-query.dto.js';
@@ -83,6 +84,13 @@ export class InvitationsService {
         await transaction.wallet.update({
           where: { id: walletId },
           data: { updatedAt: new Date() },
+        });
+
+        await notifyInvitationReceived(transaction, {
+          inviteeId: invitee.id,
+          inviterId: creatorId,
+          walletId,
+          walletTitle: invitation.wallet.title,
         });
 
         return invitation;
@@ -185,6 +193,127 @@ export class InvitationsService {
 
       return { id: invitationId, status: 'MEMBER' as const };
     });
+  }
+
+  async decline(invitationId: string, inviteeId: string) {
+    await this.prisma.$transaction(async (transaction) => {
+      const invitation = await transaction.walletMember.findUnique({
+        where: { id: invitationId },
+        select: { walletId: true, userId: true },
+      });
+
+      if (!invitation) {
+        throw new NotFoundException('Invitation introuvable.');
+      }
+      if (invitation.userId !== inviteeId) {
+        throw new ForbiddenException(
+          'Cette invitation appartient à un autre utilisateur.',
+        );
+      }
+
+      const wallet = await this.lockWallet(transaction, invitation.walletId);
+      const currentInvitation = await transaction.walletMember.findUnique({
+        where: { id: invitationId },
+        select: { walletId: true, userId: true, status: true },
+      });
+
+      if (!currentInvitation) {
+        throw new NotFoundException('Invitation introuvable.');
+      }
+      if (currentInvitation.userId !== inviteeId) {
+        throw new ForbiddenException(
+          'Cette invitation appartient à un autre utilisateur.',
+        );
+      }
+      if (wallet.status !== 'OPEN') {
+        throw new ConflictException('Ce porte-monnaie est fermé.');
+      }
+      if (currentInvitation.status !== 'INVITED') {
+        throw new ConflictException('Cette invitation a déjà été traitée.');
+      }
+
+      const result = await transaction.walletMember.deleteMany({
+        where: {
+          id: invitationId,
+          walletId: invitation.walletId,
+          userId: inviteeId,
+          status: 'INVITED',
+        },
+      });
+
+      if (result.count !== 1) {
+        throw new ConflictException(
+          'Cette invitation a déjà été traitée ou le porte-monnaie est fermé.',
+        );
+      }
+
+      await transaction.wallet.update({
+        where: { id: invitation.walletId },
+        data: { updatedAt: new Date() },
+      });
+    });
+  }
+
+  async remove(walletId: string, invitationId: string, creatorId: string) {
+    await this.prisma.$transaction(async (transaction) => {
+      const wallet = await this.lockWallet(transaction, walletId);
+
+      if (wallet.createdById !== creatorId) {
+        throw new ForbiddenException(
+          'Seul le créateur peut retirer une invitation.',
+        );
+      }
+
+      const invitation = await transaction.walletMember.findUnique({
+        where: { id: invitationId },
+        select: { walletId: true, status: true },
+      });
+
+      if (!invitation || invitation.walletId !== walletId) {
+        throw new NotFoundException('Invitation introuvable.');
+      }
+      if (wallet.status !== 'OPEN') {
+        throw new ConflictException('Ce porte-monnaie est fermé.');
+      }
+      if (invitation.status !== 'INVITED') {
+        throw new ConflictException('Cette invitation a déjà été traitée.');
+      }
+
+      const result = await transaction.walletMember.deleteMany({
+        where: {
+          id: invitationId,
+          walletId,
+          status: 'INVITED',
+        },
+      });
+
+      if (result.count !== 1) {
+        throw new ConflictException(
+          'Cette invitation a déjà été traitée ou le porte-monnaie est fermé.',
+        );
+      }
+
+      await transaction.wallet.update({
+        where: { id: walletId },
+        data: { updatedAt: new Date() },
+      });
+    });
+  }
+
+  private async lockWallet(
+    transaction: Prisma.TransactionClient,
+    walletId: string,
+  ) {
+    const wallets = await transaction.$queryRaw<
+      { createdById: string; status: 'OPEN' | 'CLOSED' }[]
+    >`SELECT "createdById", "status" FROM "Wallet" WHERE "id" = ${walletId} FOR UPDATE`;
+    const wallet = wallets[0];
+
+    if (!wallet) {
+      throw new NotFoundException('Porte-monnaie introuvable.');
+    }
+
+    return wallet;
   }
 
   private isUniqueViolation(error: unknown): boolean {

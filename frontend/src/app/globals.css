@@ -2,6 +2,7 @@
   color-scheme: light;
 
   --color-bg: #ffffff;
+  --color-surface: #ffffff;
   --color-surface-muted: #fdfcfc;
 
   --color-primary: #a50064;
@@ -36,6 +37,9 @@
 
   --radius-control: 12px;
   --radius-card: 24px;
+
+  --button-height: 44px;
+  --button-height-large: 48px;
 }
 
 * {
