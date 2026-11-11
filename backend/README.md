@@ -176,6 +176,20 @@ définie. La réponse contient la dépense mise à jour et conserve sa date d'ac
 
 ##  Exécution de l'application
 
+### Tests des cas limites IF-24
+
+La suite `test/edge-cases.e2e-spec.ts` vérifie les erreurs HTTP, les droits sur
+les dépenses et les montants en centimes. Elle utilise une base PostgreSQL
+locale dédiée aux tests, avec les migrations appliquées et les variables JWT
+configurées. Elle refuse une URL de base distante pour éviter d'écrire dans une
+base partagée.
+
+Depuis `backend/`, lancez :
+
+```bash
+npm run test:e2e -- test/edge-cases.e2e-spec.ts
+```
+
 ```bash
 # Mode développement avec rechargement automatique
 npm run start:dev
