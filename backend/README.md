@@ -208,29 +208,13 @@ L'application sera accessible à l'adresse : `http://localhost:3000`.
 
 ---
 
-##  Déploiement (Google Cloud Run)
+## Déploiement
 
-Le backend de démo tourne sur Cloud Run, construit à partir du `Dockerfile`
-de ce dossier. La base de démo est un projet Neon séparé : ne jamais utiliser
-la base `production`.
+Le backend est construit à partir du `Dockerfile`. Les environnements, secrets,
+migrations, déploiements et retours arrière sont décrits dans
+[la procédure de déploiement](../DEPLOYMENT.md).
 
-Les variables (`DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `JWT_SECRET`,
-`JWT_REFRESH_SECRET`, `REFRESH_COOKIE_PATH=/api/auth`, `FRONTEND_URL`) sont
-fournies à Cloud Run par un fichier YAML gardé hors du dépôt.
-
-Mettre en ligne une nouvelle version, depuis `backend/`, avec un `git status` propre :
-
-1. Si de nouvelles migrations existent, les appliquer d'abord sur la base de démo
-   (`npx prisma migrate deploy` avec les adresses de la base de démo).
-2. Déployer :
-
-```bash
-gcloud run deploy bons-comptes-api --source . --region europe-west1 --allow-unauthenticated --memory 512Mi --min-instances 0 --max-instances 2 --env-vars-file ~/bons-comptes-cloudrun.yaml
-```
-
-3. Vérifier que `GET /health` répond `{"status":"ok"}`.
-
-Tester l'image en local (facultatif) : `docker build -t bons-comptes-backend .`
+Pour tester l'image en local : `docker build -t bons-comptes-backend .`
 
 ---
 
