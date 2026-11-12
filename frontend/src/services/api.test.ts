@@ -93,6 +93,13 @@ describe('client API', () => {
     expect(getAccessToken()).toBe('access');
   });
 
+  it('ajoute le chemin de l’API après le préfixe du proxy', async () => {
+    vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://bons-comptes.example/api/');
+    fetchMock.mockResolvedValue(json({}));
+    await apiRequest('/auth/login', { method: 'POST' }, false);
+    expect(fetchMock.mock.calls[0][0].toString()).toBe('https://bons-comptes.example/api/auth/login');
+  });
+
   it('refuse les appels vers une origine extérieure', async () => {
     setAccessToken('secret');
     await expect(apiRequest('https://example.com/')).rejects.toThrow('backend configuré');
