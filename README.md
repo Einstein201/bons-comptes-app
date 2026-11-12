@@ -8,6 +8,7 @@ Application de gestion et de partage des dépenses entre amis, développée dans
 
 - [`backend/`](./backend/README.md) : API NestJS, Prisma et PostgreSQL.
 - [`frontend/`](./frontend/README.md) : application web Next.js, React et TypeScript.
+- [Déploiement staging et production](./DEPLOYMENT.md) : plateformes, configuration et procédures.
 
 Les deux applications ont leurs propres dépendances npm et doivent être installées depuis leur dossier respectif.
 
