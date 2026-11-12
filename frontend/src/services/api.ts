@@ -8,6 +8,16 @@ function getApiUrl(): string {
   return apiUrl;
 }
 
+// NEXT_PUBLIC_API_URL est soit l'adresse du backend (http://localhost:3000),
+// soit un chemin (/api) quand le frontend relaie les appels vers le backend.
+function buildApiUrl(path: string): URL {
+  if (!path.startsWith('/')) {
+    throw new Error("Les requêtes API doivent cibler le backend configuré.");
+  }
+  const base = getApiUrl().replace(/\/+$/, '');
+  return new URL(`${base}${path}`, globalThis.location?.origin);
+}
+
 let accessToken: string | null = null;
 let sessionVersion = 0;
 let refreshPromise: Promise<string> | null = null;
@@ -31,9 +41,9 @@ export function subscribeSession(listener: () => void): () => void {
 export async function readAccessToken(response: Response): Promise<string> {
   const body: unknown = await response.json();
   if (
-    typeof body !== 'object' || body === null ||
-    !('accessToken' in body) || typeof body.accessToken !== 'string' ||
-    !body.accessToken.trim()
+      typeof body !== 'object' || body === null ||
+      !('accessToken' in body) || typeof body.accessToken !== 'string' ||
+      !body.accessToken.trim()
   ) {
     throw new Error("La réponse d'authentification ne contient pas de token valide.");
   }
@@ -73,14 +83,11 @@ async function readErrorMessages(response: Response): Promise<string[]> {
 }
 
 export async function apiRequest(
-  path: string,
-  options?: RequestInit,
-  authenticated = true,
+    path: string,
+    options?: RequestInit,
+    authenticated = true,
 ): Promise<Response> {
-  const url = new URL(path, getApiUrl());
-  if (url.origin !== new URL(getApiUrl()).origin) {
-    throw new Error("Les requêtes API doivent cibler le backend configuré.");
-  }
+  const url = buildApiUrl(path);
 
   let token = authenticated ? accessToken ?? await refreshSession() : null;
   const send = () => {
@@ -97,8 +104,8 @@ export async function apiRequest(
   if (authenticated && response.status === 401) {
     // Une autre requête peut avoir renouvelé le token pendant cet appel.
     token = accessToken && accessToken !== token
-      ? accessToken
-      : await refreshSession();
+        ? accessToken
+        : await refreshSession();
     response = await send();
     if (response.status === 401) {
       if (accessToken === token) setAccessToken(null);

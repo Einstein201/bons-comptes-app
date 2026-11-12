@@ -68,10 +68,19 @@ propagées et ne sont pas assimilées à une session expirée.
 La connexion, le renouvellement et la déconnexion utilisent `credentials: 'include'`.
 Le refresh token reste dans le cookie HTTP-only du backend, sans stockage local.
 Le backend doit autoriser l'origine du frontend et les cookies dans sa
-configuration CORS. Son cookie utilise `SameSite=Strict` : les deux applications
-doivent être sur le même site (par exemple deux sous-domaines du même domaine,
-ou `localhost` avec des ports différents). Deux domaines sans lien ne
-permettront pas la restauration de session avec cette configuration.
+configuration CORS. Son cookie utilise `SameSite=Strict`.
+
+Lorsque le navigateur appelle **directement** le backend (cas du développement
+local), les deux applications doivent être sur le même site : par exemple deux
+sous-domaines du même domaine, ou `localhost` avec des ports différents. Avec
+deux domaines sans lien, le cookie n'est pas renvoyé et la session ne peut pas
+être restaurée après un rechargement.
+
+En ligne, le frontend (Vercel) et le backend (Cloud Run) sont justement sur deux
+domaines différents. Le proxy `/api` contourne cette limite : le navigateur
+appelle l'API sur le domaine du frontend (`/api/...`), Next.js relaie ces appels
+vers le backend, et le cookie reste attaché à un seul site. La configuration est
+détaillée dans la section « Déploiement ».
 
 `GET /auth/me` renvoie actuellement `{ userId, email, name }`. Le frontend s'en
 sert pour hydrater les informations du compte connecté.
@@ -137,3 +146,50 @@ compte.
 La déconnexion efface toujours le token en mémoire. Si le serveur ne confirme
 pas l'opération, l'interface indique que la révocation serveur n'a pas été
 confirmée.
+
+## Déploiement
+
+La démo est hébergée sur Vercel (frontend) et Google Cloud Run (backend).
+
+### Configuration
+
+Les valeurs en ligne sont définies dans Vercel et dans Cloud Run, jamais dans le
+dépôt. En local, gardez la configuration habituelle.
+
+| Variable | Application | En local | En ligne |
+| --- | --- | --- | --- |
+| `NEXT_PUBLIC_API_URL` | frontend | `http://localhost:3000` | `/api` |
+| `API_PROXY_TARGET` | frontend | non définie (proxy désactivé) | `https://<service>.run.app` (adresse du backend Cloud Run) |
+| `REFRESH_COOKIE_PATH` | backend | non définie (chemin par défaut `/auth`) | `/api/auth` |
+
+`NEXT_PUBLIC_API_URL=/api` fait appeler l'API sur le domaine du frontend.
+`API_PROXY_TARGET` active, dans `next.config.ts`, la règle qui relaie `/api/*`
+vers le backend. `REFRESH_COOKIE_PATH=/api/auth` fait correspondre le chemin du
+cookie de session aux adresses vues par le navigateur derrière le proxy.
+
+### Mettre en ligne
+
+Depuis `frontend/`, avec un `git status` propre :
+
+```bash
+npx vercel deploy --prod
+```
+
+Une variable `NEXT_PUBLIC_` est intégrée au moment du build : après l'avoir
+modifiée dans Vercel, il faut redéployer. Le dossier `.vercel/` et le fichier
+`.env.local` créés par Vercel ne doivent pas être commités.
+
+### Vérification après déploiement
+
+Sur l'adresse en ligne, avec un compte de test :
+
+1. Se connecter.
+2. Recharger la page : l'utilisateur reste connecté.
+3. Changer son mot de passe, puis recharger la page : l'utilisateur reste
+   connecté (le backend dépose un nouveau cookie de session).
+4. Se déconnecter, puis recharger la page : l'utilisateur reste déconnecté et
+   est redirigé vers la page de connexion.
+
+Si l'étape 2 ou 3 déconnecte l'utilisateur, vérifier `NEXT_PUBLIC_API_URL`,
+`API_PROXY_TARGET` et `REFRESH_COOKIE_PATH`. Si l'étape 4 le laisse connecté, le
+cookie n'a pas été effacé : vérifier `REFRESH_COOKIE_PATH`.
