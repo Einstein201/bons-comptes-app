@@ -163,3 +163,6 @@ node_modules/
 
 # Local PostgreSQL data
 /.local-postgres/
+
+# Temporary credentials created by google-github-actions/auth
+gha-creds-*.json
