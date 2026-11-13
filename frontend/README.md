@@ -70,17 +70,13 @@ Le refresh token reste dans le cookie HTTP-only du backend, sans stockage local.
 Le backend doit autoriser l'origine du frontend et les cookies dans sa
 configuration CORS. Son cookie utilise `SameSite=Strict`.
 
-Lorsque le navigateur appelle **directement** le backend (cas du développement
-local), les deux applications doivent être sur le même site : par exemple deux
-sous-domaines du même domaine, ou `localhost` avec des ports différents. Avec
-deux domaines sans lien, le cookie n'est pas renvoyé et la session ne peut pas
-être restaurée après un rechargement.
+Lorsque le navigateur appelle directement le backend, deux domaines sans lien
+empêchent le navigateur de renvoyer le cookie `SameSite=Strict`. En ligne, le
+proxy `/api` contourne cette limite : le navigateur appelle l'API sur le domaine
+du frontend et Next.js relaie ces appels vers le backend.
 
-En ligne, le frontend (Vercel) et le backend (Cloud Run) sont justement sur deux
-domaines différents. Le proxy `/api` contourne cette limite : le navigateur
-appelle l'API sur le domaine du frontend (`/api/...`), Next.js relaie ces appels
-vers le backend, et le cookie reste attaché à un seul site. La configuration est
-détaillée dans la section « Déploiement ».
+La configuration des environnements, les déploiements et les vérifications sont
+détaillés dans [la procédure de déploiement](../DEPLOYMENT.md).
 
 `GET /auth/me` renvoie actuellement `{ userId, email, name }`. Le frontend s'en
 sert pour hydrater les informations du compte connecté.
