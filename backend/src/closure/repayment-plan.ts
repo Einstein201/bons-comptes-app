@@ -15,7 +15,6 @@ export interface PlannedTransfer {
 }
 
 interface RepaymentPlanData {
-  totalAmount: number;
   memberPayments: MemberPayment[];
   paidRepayments: PairAmount[];
   pendingRepayments: PairAmount[];
@@ -39,11 +38,7 @@ function amountOfPair(
 export function calculateRepaymentPlan(
   data: RepaymentPlanData,
 ): PlannedTransfer[] {
-  const { transfers } = calculateBalances(
-    data.totalAmount,
-    data.memberPayments,
-    [],
-  );
+  const { transfers } = calculateBalances(data.memberPayments, []);
 
   return transfers.map((transfer) => {
     const paid = amountOfPair(

@@ -101,6 +101,7 @@ function createPrismaMock() {
       findMany: vi.fn(),
     },
     expense: { aggregate: vi.fn(), groupBy: vi.fn() },
+    expenseSplit: { groupBy: vi.fn() },
     repayment: { groupBy: vi.fn() },
   };
 }
@@ -118,6 +119,10 @@ describe('ClosureService.getBalance', () => {
     prisma.expense.aggregate.mockResolvedValue({ _sum: { amount: 10001 } });
     prisma.expense.groupBy.mockResolvedValue([
       { paidById: 'user-a', _sum: { amount: 10001 } },
+    ]);
+    prisma.expenseSplit.groupBy.mockResolvedValue([
+      { userId: 'user-a', _sum: { amount: 5001 } },
+      { userId: 'user-b', _sum: { amount: 5000 } },
     ]);
     prisma.repayment.groupBy.mockResolvedValue([
       {
@@ -189,11 +194,35 @@ describe('ClosureService.getBalance', () => {
       where: { walletId: 'wallet-1' },
       _sum: { amount: true },
     });
+    expect(prisma.expenseSplit.groupBy).toHaveBeenCalledWith({
+      by: ['userId'],
+      where: { expense: { walletId: 'wallet-1' } },
+      _sum: { amount: true },
+    });
+  });
+
+  it('gives no share to a member without recorded split', async () => {
+    prisma.walletMember.findMany.mockResolvedValue([
+      { userId: 'user-a', user: { name: 'Alice' } },
+      { userId: 'user-b', user: { name: 'Bob' } },
+      { userId: 'user-late', user: { name: 'Zoé' } },
+    ]);
+
+    const { balances } = await closureService.getBalance('wallet-1', 'user-a');
+
+    expect(balances[2]).toEqual({
+      userId: 'user-late',
+      name: 'Zoé',
+      paidAmount: 0,
+      shareAmount: 0,
+      balance: 0,
+    });
   });
 
   it('returns a balance at zero for a wallet without expense', async () => {
     prisma.expense.aggregate.mockResolvedValue({ _sum: { amount: null } });
     prisma.expense.groupBy.mockResolvedValue([]);
+    prisma.expenseSplit.groupBy.mockResolvedValue([]);
     prisma.repayment.groupBy.mockResolvedValue([]);
 
     const result = await closureService.getBalance('wallet-1', 'user-a');
@@ -258,6 +287,12 @@ describe('ClosureService.getOptimizedPayments', () => {
       { paidById: 'charles', _sum: { amount: 11000 } },
       { paidById: 'david', _sum: { amount: 11000 } },
     ]);
+    prisma.expenseSplit.groupBy.mockResolvedValue(
+      ['alice', 'bob', 'charles', 'david'].map((userId) => ({
+        userId,
+        _sum: { amount: 6000 },
+      })),
+    );
     prisma.repayment.groupBy.mockResolvedValue([
       {
         fromUserId: 'alice',

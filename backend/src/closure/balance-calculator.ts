@@ -2,6 +2,7 @@ export interface MemberPayment {
   userId: string;
   name: string;
   paidAmount: number;
+  shareAmount: number;
 }
 
 export interface PaidRepayment {
@@ -31,25 +32,18 @@ function byUserId(a: { userId: string }, b: { userId: string }) {
 }
 
 export function calculateBalances(
-  totalAmount: number,
   members: MemberPayment[],
   repayments: PaidRepayment[],
 ) {
-  const sortedMembers = [...members].sort(byUserId);
-  const baseShare = Math.floor(totalAmount / sortedMembers.length);
-  const remainder = totalAmount % sortedMembers.length;
-
-  const balances: MemberBalance[] = sortedMembers.map((member, index) => {
-    const shareAmount = index < remainder ? baseShare + 1 : baseShare;
-
-    return {
+  const balances: MemberBalance[] = [...members]
+    .sort(byUserId)
+    .map((member) => ({
       userId: member.userId,
       name: member.name,
       paidAmount: member.paidAmount,
-      shareAmount,
-      balance: member.paidAmount - shareAmount,
-    };
-  });
+      shareAmount: member.shareAmount,
+      balance: member.paidAmount - member.shareAmount,
+    }));
 
   for (const repayment of repayments) {
     const sender = balances.find((b) => b.userId === repayment.fromUserId);

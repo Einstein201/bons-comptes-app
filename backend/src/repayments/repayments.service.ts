@@ -214,11 +214,8 @@ export class RepaymentsService {
     fromUserId: string,
     toUserId: string,
   ) {
-    const { totalAmount, memberPayments } = await loadBalanceData(
-      transaction,
-      walletId,
-    );
-    const { transfers } = calculateBalances(totalAmount, memberPayments, []);
+    const { memberPayments } = await loadBalanceData(transaction, walletId);
+    const { transfers } = calculateBalances(memberPayments, []);
     const initialDebt =
       transfers.find(
         (transfer) =>

@@ -18,7 +18,7 @@ export async function loadBalanceData(
   client: Prisma.TransactionClient,
   walletId: string,
 ) {
-  const [members, total, paidByUser, repayments] = await Promise.all([
+  const [members, total, paidByUser, sharedByUser, repayments] = await Promise.all([
     client.walletMember.findMany({
       where: { walletId, status: 'MEMBER' },
       select: { userId: true, user: { select: { name: true } } },
@@ -32,6 +32,11 @@ export async function loadBalanceData(
       where: { walletId },
       _sum: { amount: true },
     }),
+    client.expenseSplit.groupBy({
+      by: ['userId'],
+      where: { expense: { walletId } },
+      _sum: { amount: true },
+    }),
     client.repayment.groupBy({
       by: ['fromUserId', 'toUserId', 'status'],
       where: { walletId, status: { in: ['PAID', 'PENDING'] } },
@@ -41,11 +46,13 @@ export async function loadBalanceData(
 
   const memberPayments = members.map((member) => {
     const payments = paidByUser.find((row) => row.paidById === member.userId);
+    const shares = sharedByUser.find((row) => row.userId === member.userId);
 
     return {
       userId: member.userId,
       name: member.user.name,
       paidAmount: payments?._sum.amount ?? 0,
+      shareAmount: shares?._sum.amount ?? 0,
     };
   });
 

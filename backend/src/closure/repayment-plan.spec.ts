@@ -2,12 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { calculateRepaymentPlan } from './repayment-plan.js';
 
 function member(userId: string, paidAmount: number) {
-  return { userId, name: `Nom ${userId}`, paidAmount };
+  return { userId, name: `Nom ${userId}`, paidAmount, shareAmount: 6000 };
 }
 
 // Au départ : alice doit 50 € à charles et 10 € à david, bob doit 40 € à david.
 const data = {
-  totalAmount: 24000,
   memberPayments: [
     member('alice', 0),
     member('bob', 2000),

@@ -68,7 +68,6 @@ export class ClosureService {
 
     // Le bilan par membre tient compte uniquement des remboursements PAID.
     const { balances } = calculateBalances(
-      data.totalAmount,
       data.memberPayments,
       data.paidRepayments,
     );

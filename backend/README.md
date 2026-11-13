@@ -173,9 +173,11 @@ accepte un ou deux champs : `title` (chaîne non vide de 100 caractères maximum
 et `amount` (entier positif en centimes). Seul le payeur peut modifier une
 dépense d'un porte-monnaie ouvert. `date` représente le jour de l'achat et ne
 peut pas être modifiée par cette route; `paidById` et `createdById` ne sont pas
-acceptés. Un changement de montant est refusé avec HTTP 409 si la dépense a déjà
-des parts (`ExpenseSplit`), car aucune règle de répartition automatique n'est
-définie. La réponse contient la dépense mise à jour et conserve sa date d'achat.
+acceptés. Un changement de montant est refusé avec HTTP 409 si la dépense a des
+parts (`ExpenseSplit`), ce qui est le cas de toute dépense : à la création, son
+montant est réparti à parts égales entre les membres du moment, les centimes
+restants allant aux premiers `userId` par ordre croissant. La réponse contient
+la dépense mise à jour et conserve sa date d'achat.
 
 ---
 

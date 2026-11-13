@@ -200,12 +200,7 @@ describe('Expense deletion (e2e)', () => {
 
   it('deletes the splits of the expense in cascade', async () => {
     const expenseId = await createExpense(openWalletId, alice, 1000);
-    await prisma.expenseSplit.createMany({
-      data: [
-        { expenseId, userId: alice.id, amount: 500 },
-        { expenseId, userId: bob.id, amount: 500 },
-      ],
-    });
+    expect(await prisma.expenseSplit.count({ where: { expenseId } })).toBe(2);
 
     await deleteExpense(openWalletId, expenseId, alice).expect(204);
 
