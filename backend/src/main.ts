@@ -6,8 +6,12 @@ import { isSwaggerEnabled, setupSwagger } from './swagger.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const frontendOrigin =
+    process.env.FRONTEND_ORIGIN ??
+    process.env.FRONTEND_URL ??
+    'http://localhost:3001';
   app.enableCors({
-    origin: process.env.FRONTEND_URL ?? 'http://localhost:3001',
+    origin: frontendOrigin,
     credentials: true,
   });
   app.use(cookieParser());

@@ -101,6 +101,9 @@ jobs:
       - name: Run build
         run: npm run build
 
+      - name: Build backend container
+        run: docker build --tag bons-comptes-backend:ci .
+
       - name: Run unit tests
         run: npm test
 
@@ -153,3 +156,283 @@ jobs:
 
       - name: Run frontend tests
         run: npm test
+
+  deploy-staging:
+    name: Deploy staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev' && vars.STAGING_DEPLOY_ENABLED == 'true'
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    environment: staging
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT: ${{ vars.CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT }}
+      FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22.22.3"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Setup Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Build backend image
+        run: |
+          gcloud builds submit backend \
+            --project="$GCP_PROJECT_ID" \
+            --tag="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/bons-comptes/bons-comptes-api:$GITHUB_SHA"
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Setup Vercel project
+        working-directory: frontend
+        env:
+          VERCEL_PROJECT_NAME: ${{ vars.VERCEL_PROJECT_NAME }}
+          VERCEL_SCOPE: ${{ vars.VERCEL_SCOPE }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          npx --yes vercel@latest link --yes \
+            --project="$VERCEL_PROJECT_NAME" \
+            --scope="$VERCEL_SCOPE" \
+            --token="$VERCEL_TOKEN"
+          npx --yes vercel@latest pull --yes \
+            --environment=production \
+            --token="$VERCEL_TOKEN"
+
+      - name: Build staging frontend
+        working-directory: frontend
+        env:
+          API_PROXY_TARGET: ${{ vars.API_PROXY_TARGET }}
+          NEXT_PUBLIC_API_URL: /api
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx --yes vercel@latest build --prod --token="$VERCEL_TOKEN"
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Load direct database URL for migrations
+        shell: bash
+        run: |
+          DIRECT_DATABASE_URL="$(gcloud secrets versions access latest \
+            --secret=DATABASE_URL_UNPOOLED \
+            --project="$GCP_PROJECT_ID")"
+          if [ -z "$DIRECT_DATABASE_URL" ]; then
+            echo "DATABASE_URL_UNPOOLED is empty or unavailable." >&2
+            exit 1
+          fi
+          echo "::add-mask::$DIRECT_DATABASE_URL"
+          {
+            printf 'DATABASE_URL=%s\n' "$DIRECT_DATABASE_URL"
+            printf 'DATABASE_URL_UNPOOLED=%s\n' "$DIRECT_DATABASE_URL"
+          } >> "$GITHUB_ENV"
+
+      - name: Apply staging database migrations
+        working-directory: backend
+        run: npx prisma migrate deploy
+
+      - name: Verify staging migration state
+        working-directory: backend
+        run: npx prisma migrate status
+
+      - name: Deploy staging API
+        run: |
+          gcloud run deploy bons-comptes-api \
+            --project="$GCP_PROJECT_ID" \
+            --region="$GCP_REGION" \
+            --image="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/bons-comptes/bons-comptes-api:$GITHUB_SHA" \
+            --service-account="$CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT" \
+            --allow-unauthenticated \
+            --min=0 \
+            --max=2 \
+            --memory=512Mi \
+            --set-env-vars="NODE_ENV=production,FRONTEND_ORIGIN=$FRONTEND_ORIGIN,REFRESH_COOKIE_PATH=/api/auth,SWAGGER_ENABLED=false" \
+            --set-secrets="DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest,JWT_REFRESH_SECRET=JWT_REFRESH_SECRET:latest" \
+            --quiet
+
+      - name: Verify staging API health
+        shell: bash
+        run: |
+          SERVICE_URL="$(gcloud run services describe bons-comptes-api \
+            --project="$GCP_PROJECT_ID" \
+            --region="$GCP_REGION" \
+            --format='value(status.url)')"
+          if [ -z "$SERVICE_URL" ]; then
+            echo "Cloud Run did not return a service URL." >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error "$SERVICE_URL/health"
+
+      - name: Deploy staging frontend
+        working-directory: frontend
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx --yes vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+      - name: Verify staging frontend and API proxy
+        run: |
+          curl --fail --silent --show-error "$FRONTEND_ORIGIN"
+          curl --fail --silent --show-error "$FRONTEND_ORIGIN/api/health"
+
+  deploy-production:
+    name: Deploy production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PRODUCTION_DEPLOY_ENABLED == 'true'
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT: ${{ vars.CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT }}
+      FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22.22.3"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Setup Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Build backend image
+        run: |
+          gcloud builds submit backend \
+            --project="$GCP_PROJECT_ID" \
+            --tag="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/bons-comptes/bons-comptes-api:$GITHUB_SHA"
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Setup Vercel project
+        working-directory: frontend
+        env:
+          VERCEL_PROJECT_NAME: ${{ vars.VERCEL_PROJECT_NAME }}
+          VERCEL_SCOPE: ${{ vars.VERCEL_SCOPE }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          npx --yes vercel@latest link --yes \
+            --project="$VERCEL_PROJECT_NAME" \
+            --scope="$VERCEL_SCOPE" \
+            --token="$VERCEL_TOKEN"
+          npx --yes vercel@latest pull --yes \
+            --environment=production \
+            --token="$VERCEL_TOKEN"
+
+      - name: Build production frontend
+        working-directory: frontend
+        env:
+          API_PROXY_TARGET: ${{ vars.API_PROXY_TARGET }}
+          NEXT_PUBLIC_API_URL: /api
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx --yes vercel@latest build --prod --token="$VERCEL_TOKEN"
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Load direct database URL for migrations
+        shell: bash
+        run: |
+          DIRECT_DATABASE_URL="$(gcloud secrets versions access latest \
+            --secret=DATABASE_URL_UNPOOLED \
+            --project="$GCP_PROJECT_ID")"
+          if [ -z "$DIRECT_DATABASE_URL" ]; then
+            echo "DATABASE_URL_UNPOOLED is empty or unavailable." >&2
+            exit 1
+          fi
+          echo "::add-mask::$DIRECT_DATABASE_URL"
+          {
+            printf 'DATABASE_URL=%s\n' "$DIRECT_DATABASE_URL"
+            printf 'DATABASE_URL_UNPOOLED=%s\n' "$DIRECT_DATABASE_URL"
+          } >> "$GITHUB_ENV"
+
+      - name: Apply production database migrations
+        working-directory: backend
+        run: npx prisma migrate deploy
+
+      - name: Verify production migration state
+        working-directory: backend
+        run: npx prisma migrate status
+
+      - name: Deploy production API
+        run: |
+          gcloud run deploy bons-comptes-api \
+            --project="$GCP_PROJECT_ID" \
+            --region="$GCP_REGION" \
+            --image="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/bons-comptes/bons-comptes-api:$GITHUB_SHA" \
+            --service-account="$CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT" \
+            --allow-unauthenticated \
+            --min=0 \
+            --max=2 \
+            --memory=512Mi \
+            --set-env-vars="NODE_ENV=production,FRONTEND_ORIGIN=$FRONTEND_ORIGIN,REFRESH_COOKIE_PATH=/api/auth,SWAGGER_ENABLED=false" \
+            --set-secrets="DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest,JWT_REFRESH_SECRET=JWT_REFRESH_SECRET:latest" \
+            --quiet
+
+      - name: Verify production API health
+        shell: bash
+        run: |
+          SERVICE_URL="$(gcloud run services describe bons-comptes-api \
+            --project="$GCP_PROJECT_ID" \
+            --region="$GCP_REGION" \
+            --format='value(status.url)')"
+          if [ -z "$SERVICE_URL" ]; then
+            echo "Cloud Run did not return a service URL." >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error "$SERVICE_URL/health"
+
+      - name: Deploy production frontend
+        working-directory: frontend
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx --yes vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+      - name: Verify production frontend and API proxy
+        run: |
+          curl --fail --silent --show-error "$FRONTEND_ORIGIN"
+          curl --fail --silent --show-error "$FRONTEND_ORIGIN/api/health"
