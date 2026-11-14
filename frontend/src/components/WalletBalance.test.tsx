@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ApiError } from '../services/api';
+import { SHARED_DATA_REFRESH_INTERVAL_MS } from '../hooks/useVisiblePolling';
 import { WalletBalance } from './WalletBalance';
 import { useWalletClosed } from './WalletTabs';
 
@@ -55,11 +56,30 @@ beforeEach(() => {
   mocks.getOptimizedPayments.mockResolvedValue(plan);
   mocks.getRepayments.mockResolvedValue({ items: [], nextCursor: null });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 async function openTab(name: string) {
   fireEvent.click(await screen.findByRole('tab', { name }));
 }
+
+it('actualise automatiquement le statut partagé du porte-monnaie', async () => {
+  vi.useFakeTimers();
+  mocks.getWallet.mockResolvedValueOnce(detail).mockResolvedValue(closedDetail);
+  render(<WalletBalance walletId="wallet-1" />);
+  await act(async () => {});
+
+  expect(screen.getByText('Ouvert')).toBeTruthy();
+
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(SHARED_DATA_REFRESH_INTERVAL_MS);
+  });
+
+  expect(mocks.getWallet).toHaveBeenCalledTimes(2);
+  expect(screen.getByText('Clôturé')).toBeTruthy();
+});
 
 it('réserve le bouton au créateur et ne charge pas le bilan ouvert', async () => {
   render(<WalletBalance walletId="wallet-1" />);
