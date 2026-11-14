@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '../services/api';
 import {
   cancelRepayment,
@@ -13,6 +13,7 @@ import {
 } from '../services/repayments';
 import type { OptimizedTransfer } from '../services/closure';
 import { formatCents } from '../services/money';
+import { useVisiblePolling } from '../hooks/useVisiblePolling';
 import { Button } from './Button';
 import styles from './RepaymentsPanel.module.css';
 
@@ -121,6 +122,7 @@ export function RepaymentsPanel({
   const [formError, setFormError] = useState<string>();
   const [pendingAction, setPendingAction] = useState<string>();
   const actionPending = useRef(false);
+  const pollGeneration = useRef(0);
   const outgoingTransfers = transfers.filter(
     (transfer) => transfer.fromUserId === userId && transfer.declarableAmount > 0,
   );
@@ -130,6 +132,7 @@ export function RepaymentsPanel({
 
   useEffect(() => {
     let active = true;
+    pollGeneration.current += 1;
     setLoading(true);
     getRepayments(walletId, {
       limit: PAGE_LIMIT,
@@ -148,7 +151,30 @@ export function RepaymentsPanel({
     return () => { active = false; };
   }, [walletId, status, cursors, revision]);
 
+  const refreshSharedData = useCallback(async () => {
+    if (actionPending.current || pendingAction || amount.trim() !== '') return;
+    const generation = ++pollGeneration.current;
+
+    try {
+      const currentPage = await getRepayments(walletId, {
+        limit: PAGE_LIMIT,
+        cursor: cursors[cursors.length - 1],
+        ...(status ? { status } : {}),
+      });
+      if (generation !== pollGeneration.current) return;
+
+      setPage(currentPage);
+      setError(undefined);
+    } catch (loadError) {
+      if (generation !== pollGeneration.current) return;
+      setError(describeError(loadError));
+    }
+  }, [pendingAction, amount, walletId, cursors, status, onFinancialRefresh]);
+
+  useVisiblePolling(refreshSharedData);
+
   async function refreshAfterMutation(actionSucceeded = true) {
+    pollGeneration.current += 1;
     setRevision((value) => value + 1);
     try {
       await onFinancialRefresh();
@@ -165,6 +191,7 @@ export function RepaymentsPanel({
     successMessage: string,
   ): Promise<boolean> {
     if (actionPending.current) return false;
+    pollGeneration.current += 1;
     actionPending.current = true;
     setPendingAction(key);
     setError(undefined);
@@ -217,6 +244,7 @@ export function RepaymentsPanel({
   }
 
   function changeStatus(value: string) {
+    pollGeneration.current += 1;
     setStatus(value as RepaymentStatus | '');
     setCursors([undefined]);
     setPage(undefined);
@@ -225,12 +253,14 @@ export function RepaymentsPanel({
 
   function goToNextPage() {
     if (!page?.nextCursor) return;
+    pollGeneration.current += 1;
     setCursors((current) => [...current, page.nextCursor ?? undefined]);
     setPage(undefined);
   }
 
   function goToPreviousPage() {
     if (cursors.length <= 1) return;
+    pollGeneration.current += 1;
     setCursors((current) => current.slice(0, -1));
     setPage(undefined);
   }
