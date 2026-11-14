@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ApiError } from '../services/api';
+import { SHARED_DATA_REFRESH_INTERVAL_MS } from '../hooks/useVisiblePolling';
 import {
   cancelRepayment,
   confirmRepayment,
@@ -52,7 +53,10 @@ beforeEach(() => {
   financialRefresh.mockResolvedValue();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 function renderPanel(
   options: {
@@ -83,6 +87,28 @@ it('affiche les noms, le statut, le montant et les dates du remboursement', asyn
   expect(within(item as HTMLElement).getByText('12,50 €')).toBeDefined();
   expect(within(item as HTMLElement).getByText(/Déclaré le/)).toBeDefined();
   expect(within(item as HTMLElement).getByText(/Payé le/)).toBeDefined();
+});
+
+it('actualise automatiquement les remboursements partagés', async () => {
+  vi.useFakeTimers();
+  vi.mocked(getRepayments)
+    .mockResolvedValueOnce({ items: [first], nextCursor: null })
+    .mockResolvedValueOnce({ items: [second], nextCursor: null });
+  renderPanel();
+  await act(async () => {});
+
+  const repayment = screen.getByText('Bob → Alice').closest('li') as HTMLElement;
+  expect(within(repayment).getByText('En attente')).toBeTruthy();
+
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(SHARED_DATA_REFRESH_INTERVAL_MS);
+  });
+
+  expect(getRepayments).toHaveBeenCalledTimes(2);
+  expect(financialRefresh).not.toHaveBeenCalled();
+  const refreshedRepayment = screen.getByText('Bob → Alice').closest('li') as HTMLElement;
+  expect(within(refreshedRepayment).getByText('Payé')).toBeTruthy();
+  expect(within(refreshedRepayment).queryByText('En attente')).toBeNull();
 });
 
 it('filtre par statut et navigue dans les pages avec les curseurs API', async () => {
