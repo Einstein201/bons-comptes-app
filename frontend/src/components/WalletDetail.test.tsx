@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../services/api';
+import { SHARED_DATA_REFRESH_INTERVAL_MS } from '../hooks/useVisiblePolling';
 import type { Expense } from '../services/expenses';
 import { mergeExpenses, WalletDetail } from './WalletDetail';
 import { WalletClosedProvider, WalletTabProvider } from './WalletTabs';
@@ -72,7 +73,41 @@ describe('détail d’un porte-monnaie', () => {
         vi.resetAllMocks();
         givenWallet();
     });
-    afterEach(cleanup);
+    afterEach(() => {
+        cleanup();
+        vi.useRealTimers();
+    });
+
+    it('affiche automatiquement une dépense ajoutée par un autre membre', async () => {
+        vi.useFakeTimers();
+        mocks.listExpenses
+            .mockResolvedValueOnce({
+                items: [expense('e-1', '2025-06-12', 100, 'me', 'Dépense initiale')],
+                nextCursor: null,
+                totalAmount: 100,
+            })
+            .mockResolvedValueOnce({
+                items: [
+                    expense('e-2', '2025-06-21', 200, 'chloe', 'Nouvelle dépense'),
+                    expense('e-1', '2025-06-12', 100, 'me', 'Dépense initiale'),
+                ],
+                nextCursor: null,
+                totalAmount: 300,
+            });
+
+        render(<WalletDetail walletId="wallet-1" />);
+        await act(async () => {});
+
+        expect(screen.getByText('Dépense initiale')).toBeTruthy();
+        expect(screen.queryByText('Nouvelle dépense')).toBeNull();
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(SHARED_DATA_REFRESH_INTERVAL_MS);
+        });
+
+        expect(screen.getByText('Nouvelle dépense')).toBeTruthy();
+        expect(plain(screen.getByText(/3,00/).textContent)).toBe('3,00 €');
+    });
 
     it('affiche les dépenses, leur payeur et le total renvoyé par le backend', async () => {
         mocks.listExpenses.mockResolvedValue({

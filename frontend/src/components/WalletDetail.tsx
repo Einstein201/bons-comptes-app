@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useVisiblePolling } from '../hooks/useVisiblePolling';
 import { ApiError } from '../services/api';
-import { deleteExpense, listExpenses, type Expense } from '../services/expenses';
+import { deleteExpense, listExpenses, type Expense, type ExpensePage } from '../services/expenses';
 import { leaveWallet, removeMember } from '../services/memberships';
 import { getWalletDetails, type WalletWithMembers, type WalletMember } from '../services/wallets';
 import { formatCents } from '../utils/money';
@@ -70,6 +71,7 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
     const [totalAmount, setTotalAmount] = useState(0);
     const [nextCursor, setNextCursor] = useState<string | null>(null);
     const [loadError, setLoadError] = useState<string>();
+    const [refreshError, setRefreshError] = useState<string>();
     const [loadingMore, setLoadingMore] = useState(false);
     const [deletingId, setDeletingId] = useState<string>();
     const [formOpen, setFormOpen] = useState(false);
@@ -79,10 +81,14 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
     const [memberNotice, setMemberNotice] = useState<Notice>();
     // Augmente à chaque ajout ou suppression réussi.
     const mutationCount = useRef(0);
+    const loadedExpensePages = useRef(1);
+    const sharedRefreshGeneration = useRef(0);
 
     useEffect(() => {
         let ignore = false; // ignore une réponse arrivée après un changement de page
 
+        loadedExpensePages.current = 1;
+        sharedRefreshGeneration.current += 1;
         Promise.all([getWalletDetails(walletId), listExpenses(walletId)])
             .then(([details, page]) => {
                 if (ignore) return;
@@ -104,6 +110,76 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
             ignore = true;
         };
     }, [walletId]);
+
+    const refreshSharedData = useCallback(async () => {
+        if (
+            !wallet ||
+            (!showExpenses && !showMembers) ||
+            formOpen ||
+            editingExpense ||
+            deletingId ||
+            loadingMore ||
+            memberDialog
+        ) {
+            return;
+        }
+
+        const generation = ++sharedRefreshGeneration.current;
+        const mutationAtStart = mutationCount.current;
+        const pagesToLoad = loadedExpensePages.current;
+
+        try {
+            const details = await getWalletDetails(walletId);
+            const pages: ExpensePage[] = [];
+            let cursor: string | undefined;
+
+            for (let index = 0; index < pagesToLoad; index += 1) {
+                const page = await listExpenses(walletId, cursor ? { cursor } : {});
+                pages.push(page);
+                cursor = page.nextCursor ?? undefined;
+                if (!cursor) break;
+            }
+
+            if (
+                generation !== sharedRefreshGeneration.current ||
+                mutationAtStart !== mutationCount.current
+            ) {
+                return;
+            }
+
+            setWallet(details.wallet);
+            setMembers(details.members);
+            setExpenses(mergeExpenses([], pages.flatMap((page) => page.items)));
+            setTotalAmount(pages[0]?.totalAmount ?? 0);
+            setNextCursor(pages[pages.length - 1]?.nextCursor ?? null);
+            loadedExpensePages.current = pages.length;
+            setLoadError(undefined);
+            setRefreshError(undefined);
+        } catch (error) {
+            if (
+                generation !== sharedRefreshGeneration.current ||
+                mutationAtStart !== mutationCount.current
+            ) {
+                return;
+            }
+            if (!(error instanceof ApiError) && !(error instanceof TypeError)) {
+                console.error(error);
+            }
+            setRefreshError(describeExpenseError(error, 'load'));
+        }
+    }, [
+        wallet,
+        showExpenses,
+        showMembers,
+        formOpen,
+        editingExpense,
+        deletingId,
+        loadingMore,
+        memberDialog,
+        walletId,
+    ]);
+
+    useVisiblePolling(refreshSharedData);
 
     const isOpen = wallet?.status === 'OPEN';
     const acceptedMembers = members.filter((member) => member.status === 'MEMBER');
@@ -140,6 +216,7 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
     }
 
     async function confirmMemberAction(dialog: MemberDialog) {
+        sharedRefreshGeneration.current += 1;
         try {
             if (dialog.action === 'leave') {
                 await leaveWallet(walletId);
@@ -168,6 +245,7 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
 
     async function handleLoadMore() {
         if (!nextCursor || loadingMore) return;
+        sharedRefreshGeneration.current += 1;
         setLoadingMore(true);
         setNotice(undefined);
         const countAtStart = mutationCount.current;
@@ -175,6 +253,7 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
             const page = await listExpenses(walletId, { cursor: nextCursor });
             setExpenses((current) => mergeExpenses(current, page.items));
             setNextCursor(page.nextCursor);
+            loadedExpensePages.current += 1;
             // Si un ajout ou une suppression a eu lieu pendant la requête, ce total est périmé :
             // on garde le total local, déjà mis à jour par la mutation.
             if (mutationCount.current === countAtStart) {
@@ -188,6 +267,7 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
     }
 
     function handleCreated(expense: Expense) {
+        sharedRefreshGeneration.current += 1;
         mutationCount.current += 1;
         setFormOpen(false);
         setExpenses((current) => mergeExpenses(current, [expense]));
@@ -196,6 +276,7 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
     }
 
     function handleUpdated(expense: Expense, previous: Expense) {
+        sharedRefreshGeneration.current += 1;
         mutationCount.current += 1;
         setEditingExpense(undefined);
         setExpenses((current) => mergeExpenses(current, [expense]));
@@ -211,6 +292,7 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
 
     async function handleDelete(expense: Expense) {
         if (deletingId) return;
+        sharedRefreshGeneration.current += 1;
         setDeletingId(expense.id);
         setNotice(undefined);
         try {
@@ -254,6 +336,7 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
 
     return (
         <div className={styles.content}>
+            {refreshError ? <p className={styles.alert} role="alert">{refreshError}</p> : null}
             {/* Titre, statut et description sont affichés par WalletBalance (IF-38). */}
             {showExpenses ? (
             <section className={styles.summary}>
@@ -266,7 +349,11 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
                         ))}
                     </ul>
                     {isOpen ? (
-                        <Button onClick={() => { setNotice(undefined); setFormOpen(true); }}>
+                        <Button onClick={() => {
+                            sharedRefreshGeneration.current += 1;
+                            setNotice(undefined);
+                            setFormOpen(true);
+                        }}>
                             <PlusIcon className={styles.buttonIcon} /> Ajouter une dépense
                         </Button>
                     ) : null}
@@ -295,7 +382,11 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
                                         variant="ghost"
                                         className={styles.memberAction}
                                         aria-label={`Retirer ${member.name}`}
-                                        onClick={() => { setMemberNotice(undefined); setMemberDialog({ action: 'remove', member }); }}
+                                        onClick={() => {
+                                            sharedRefreshGeneration.current += 1;
+                                            setMemberNotice(undefined);
+                                            setMemberDialog({ action: 'remove', member });
+                                        }}
                                     >
                                         Retirer
                                     </Button>
@@ -316,13 +407,23 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
                     <Button
                         variant="secondary"
                         className={styles.leaveButton}
-                        onClick={() => { setMemberNotice(undefined); setMemberDialog({ action: 'leave' }); }}
+                        onClick={() => {
+                            sharedRefreshGeneration.current += 1;
+                            setMemberNotice(undefined);
+                            setMemberDialog({ action: 'leave' });
+                        }}
                     >
                         Quitter le porte-monnaie
                     </Button>
                 ) : null}
                 {wallet.isCreator && isOpen ? (
-                    <InviteMemberForm walletId={walletId} onInvited={async () => { await refreshMembers(); }} />
+                    <InviteMemberForm
+                        walletId={walletId}
+                        onInvited={async () => {
+                            sharedRefreshGeneration.current += 1;
+                            await refreshMembers();
+                        }}
+                    />
                 ) : null}
             </section>
             ) : null}
@@ -361,7 +462,11 @@ function WalletDetailContent({ walletId }: { walletId: string }) {
                 currentUserId={currentUserId}
                 canEdit={isOpen}
                 deletingId={deletingId}
-                onEdit={(expense) => { setNotice(undefined); setEditingExpense(expense); }}
+                onEdit={(expense) => {
+                    sharedRefreshGeneration.current += 1;
+                    setNotice(undefined);
+                    setEditingExpense(expense);
+                }}
                 onDelete={handleDelete}
                 hasMore={nextCursor !== null}
                 loadingMore={loadingMore}
