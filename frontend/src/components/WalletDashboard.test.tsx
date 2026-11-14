@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../services/api';
+import { SHARED_DATA_REFRESH_INTERVAL_MS } from '../hooks/useVisiblePolling';
 import type {
   InvitationItem,
   WalletListItem,
@@ -66,7 +67,28 @@ describe('tableau de bord', () => {
     mocks.acceptInvitation.mockReset();
     mocks.declineInvitation.mockReset();
   });
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it('actualise automatiquement la liste des porte-monnaie', async () => {
+    vi.useFakeTimers();
+    mocks.listWallets
+      .mockResolvedValueOnce(lists())
+      .mockResolvedValueOnce(lists({ open: page([wallet('new')]) }));
+
+    render(<WalletDashboard />);
+    await act(async () => {});
+
+    expect(screen.queryByText('Porte-monnaie new')).toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SHARED_DATA_REFRESH_INTERVAL_MS);
+    });
+
+    expect(screen.getByText('Porte-monnaie new')).toBeTruthy();
+  });
 
   it('affiche les porte-monnaie ouverts avec leur créateur et les compteurs', async () => {
     mocks.listWallets.mockResolvedValue(
