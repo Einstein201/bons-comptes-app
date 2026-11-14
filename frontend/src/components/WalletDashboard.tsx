@@ -15,6 +15,7 @@ import {
   type WalletLists,
   type WalletSection,
 } from '../services/wallets';
+import { useVisiblePolling } from '../hooks/useVisiblePolling';
 import { Button, ButtonLink } from './Button';
 import { describeInvitationError } from './invitationErrors';
 import {
@@ -210,6 +211,7 @@ export function WalletDashboard({
   const [active, setActive] = useState<WalletSection>(initialSection);
   const [pending, setPending] = useState<PendingAction>();
   const [notice, setNotice] = useState<ActionNotice>();
+  const [refreshError, setRefreshError] = useState<string>();
   // Le verrou est lu avant le prochain rendu : deux clics rapprochés ne lancent qu'une action.
   const actionLock = useRef(false);
   const noticeRef = useRef<HTMLDivElement>(null);
@@ -313,6 +315,46 @@ export function WalletDashboard({
       initialRequest.current += 1;
     };
   }, [applyLists]);
+
+  const refreshActiveSection = useCallback(async () => {
+    if (pending !== undefined) return;
+    const current = sections[active];
+    if (current.loading) return;
+    const request = ++requests.current[active];
+
+    try {
+      const lists = await listWallets({
+        section: active,
+        cursor: current.cursors[current.index],
+        limit: PAGE_SIZE,
+      });
+      if (requests.current[active] !== request) return;
+
+      setTotals({
+        open: lists.open.total,
+        closed: lists.closed.total,
+        invitations: lists.invitations.total,
+      });
+      setSections((latest) => ({
+        ...latest,
+        [active]: {
+          ...latest[active],
+          page: lists[active],
+          loading: false,
+          error: undefined,
+        },
+      }));
+      setRefreshError(undefined);
+    } catch (error) {
+      if (requests.current[active] !== request) return;
+      if (!(error instanceof ApiError) && !(error instanceof TypeError)) {
+        console.error(error);
+      }
+      setRefreshError(describeError(error));
+    }
+  }, [active, pending, sections]);
+
+  useVisiblePolling(refreshActiveSection);
 
   // La ligne traitée disparaît : sans cela, le focus clavier serait perdu en haut de la page.
   useEffect(() => {
@@ -479,6 +521,11 @@ export function WalletDashboard({
             {notice.link ? (
               <ButtonLink href={notice.link.href}>{notice.link.label}</ButtonLink>
             ) : null}
+          </div>
+        ) : null}
+        {refreshError ? (
+          <div className={`${styles.notice} ${styles.error}`} role="alert">
+            {refreshError}
           </div>
         ) : null}
 
