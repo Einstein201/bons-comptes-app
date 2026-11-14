@@ -360,14 +360,14 @@ describe('erreurs', () => {
 });
 
 describe('actualisation périodique', () => {
-  it('met à jour la pastille toutes les 30 secondes', async () => {
+  it('met à jour la pastille toutes les 10 secondes', async () => {
     vi.useFakeTimers();
     await renderBell();
     expect(bell().textContent).toBe('1');
 
     mocks.getNotifications.mockResolvedValue(page([invitation], 4));
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(10_000);
     });
 
     expect(mocks.getNotifications).toHaveBeenCalledTimes(2);
@@ -388,7 +388,7 @@ describe('actualisation périodique', () => {
     );
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(10_000);
     });
 
     expect(screen.getByRole('status').textContent).toContain(
