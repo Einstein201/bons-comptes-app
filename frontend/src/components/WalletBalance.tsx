@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useVisiblePolling } from '../hooks/useVisiblePolling';
 import { ApiError } from '../services/api';
 import {
   closeWallet, getOptimizedPayments, getWalletBalance,
@@ -16,10 +17,12 @@ import {
 } from './WalletTabs';
 import styles from './WalletBalance.module.css';
 
+type Financial = { balance: Balance; plan: OptimizedPayments };
+
 type State =
     | { status: 'loading' }
     | { status: 'error'; message: string }
-    | { status: 'ready'; detail: WalletDetails; financial?: { balance: Balance; plan: OptimizedPayments } };
+    | { status: 'ready'; detail: WalletDetails; financial?: Financial };
 
 function describeError(error: unknown): string {
   if (error instanceof ApiError) {
@@ -78,6 +81,7 @@ export function WalletBalance({ walletId, children }: { walletId: string; childr
   const [selectedTab, setSelectedTab] = useState<WalletTabId>('expenses');
   const actionPending = useRef(false);
   const mounted = useRef(false);
+  const sharedRefreshGeneration = useRef(0);
 
   useEffect(() => {
     mounted.current = true;
@@ -86,6 +90,7 @@ export function WalletBalance({ walletId, children }: { walletId: string; childr
 
   useEffect(() => {
     let active = true;
+    sharedRefreshGeneration.current += 1;
     async function load() {
       try {
         const detail = await getWallet(walletId);
@@ -106,7 +111,42 @@ export function WalletBalance({ walletId, children }: { walletId: string; childr
     return () => { active = false; };
   }, [walletId, revision]);
 
+  const refreshSharedData = useCallback(async () => {
+    if (state.status === 'loading' || actionPending.current || confirming || closing) return;
+    const generation = ++sharedRefreshGeneration.current;
+
+    try {
+      const detail = await getWallet(walletId);
+      let financial: Financial | undefined;
+      if (detail.wallet.status === 'CLOSED') {
+        const [balance, plan] = await Promise.all([
+          getWalletBalance(walletId),
+          getOptimizedPayments(walletId),
+        ]);
+        checkFinancialData(balance, plan);
+        financial = { balance, plan };
+      }
+      if (generation !== sharedRefreshGeneration.current) return;
+
+      setState({
+        status: 'ready',
+        detail,
+        ...(detail.wallet.status === 'CLOSED' ? { financial } : {}),
+      });
+      setActionError(undefined);
+    } catch (error) {
+      if (generation !== sharedRefreshGeneration.current) return;
+      if (!(error instanceof ApiError) && !(error instanceof TypeError)) {
+        console.error(error);
+      }
+      setActionError(describeError(error));
+    }
+  }, [state.status, confirming, closing, walletId]);
+
+  useVisiblePolling(refreshSharedData);
+
   function refresh() {
+    sharedRefreshGeneration.current += 1;
     setState({ status: 'loading' });
     setConfirming(false);
     setActionError(undefined);
@@ -135,6 +175,7 @@ export function WalletBalance({ walletId, children }: { walletId: string; childr
     if (actionPending.current || state.status !== 'ready' ||
         state.detail.wallet.status !== 'OPEN' || !state.detail.wallet.isCreator) return;
     actionPending.current = true;
+    sharedRefreshGeneration.current += 1;
     setClosing(true);
     setActionError(undefined);
     try {
