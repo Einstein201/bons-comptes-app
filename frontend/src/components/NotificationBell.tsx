@@ -16,13 +16,12 @@ import {
   markNotificationRead,
   type Notification,
 } from '../services/notifications';
+import { useVisiblePolling } from '../hooks/useVisiblePolling';
 import { formatRelativeTime } from '../utils/relativeTime';
 import { BellIcon } from './icons';
 import styles from './NotificationBell.module.css';
 
 const PAGE_LIMIT = 10;
-// Actualisation légère, sans websocket : un seul appel qui renvoie aussi le compteur de non lues.
-const POLL_INTERVAL_MS = 30_000;
 const SEEN_NOTIFICATIONS_KEY = 'bons-comptes:seen-notifications';
 const TOAST_DURATION_MS = 7_000;
 
@@ -100,18 +99,8 @@ export function NotificationBell() {
 
   useEffect(() => {
     void refresh();
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') void refresh();
-    }, POLL_INTERVAL_MS);
-    function refreshWhenVisible() {
-      if (document.visibilityState === 'visible') void refresh();
-    }
-    document.addEventListener('visibilitychange', refreshWhenVisible);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener('visibilitychange', refreshWhenVisible);
-    };
   }, [refresh]);
+  useVisiblePolling(refresh);
 
   useEffect(() => {
     if (!toast) return;
