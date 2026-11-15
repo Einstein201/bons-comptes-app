@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   useId,
   useRef,
@@ -16,12 +16,6 @@ import { MemberInvites } from './MemberInvites';
 import styles from './WalletForm.module.css';
 
 const TITLE_MAX_LENGTH = 100;
-
-type CreatedWallet = {
-  id: string;
-  title: string;
-  pendingInvitations: number;
-};
 
 type SubmitFailure = {
   message: string;
@@ -76,6 +70,7 @@ function describeFailure(error: unknown): SubmitFailure {
 }
 
 export function WalletForm() {
+  const router = useRouter();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [invitedEmails, setInvitedEmails] = useState<string[]>([]);
@@ -83,8 +78,6 @@ export function WalletForm() {
   const [serverTitleError, setServerTitleError] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
   const [failure, setFailure] = useState<string>();
-  const [created, setCreated] = useState<CreatedWallet>();
-  const [invitesKey, setInvitesKey] = useState(0);
   const titleRef = useRef<HTMLInputElement>(null);
   const invitesTitleId = useId();
 
@@ -94,7 +87,6 @@ export function WalletForm() {
   function handleTitleChange(event: ChangeEvent<HTMLInputElement>) {
     setTitle(event.target.value);
     setServerTitleError(undefined);
-    setCreated(undefined);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -106,7 +98,6 @@ export function WalletForm() {
 
     setTitleTouched(true);
     setFailure(undefined);
-    setCreated(undefined);
 
     if (validateTitle(title)) {
       titleRef.current?.focus();
@@ -117,23 +108,14 @@ export function WalletForm() {
 
     try {
       const trimmedDescription = description.trim();
-      const wallet = await createWallet({
+      await createWallet({
         title: title.trim(),
         ...(trimmedDescription ? { description: trimmedDescription } : {}),
       });
 
       // POST /wallets n'accepte que title et description : les adresses saisies ne sont
       // pas encore envoyées. TODO : les transmettre quand l'API d'invitation existera.
-      setCreated({
-        id: wallet.id,
-        title: wallet.title,
-        pendingInvitations: invitedEmails.length,
-      });
-      setTitle('');
-      setDescription('');
-      setInvitedEmails([]);
-      setTitleTouched(false);
-      setInvitesKey((key) => key + 1);
+      router.replace('/');
     } catch (error) {
       if (!(error instanceof ApiError) && !(error instanceof TypeError)) {
         console.error(error);
@@ -159,21 +141,6 @@ export function WalletForm() {
             Créer un nouveau <span className={styles.nowrap}>porte-monnaie</span>
           </h2>
 
-        {created ? (
-          <p className={styles.success} role="status">
-            Le porte-monnaie «&nbsp;{created.title}&nbsp;» a été créé.
-            {created.pendingInvitations > 0
-              ? ' Les invitations ne sont pas encore prises en charge : vous pourrez inviter ces membres plus tard.'
-              : null}{' '}
-            <Link href={`/wallets/${encodeURIComponent(created.id)}`} className={styles.successLink}>
-              Ouvrir le porte-monnaie
-            </Link>
-            {' · '}
-            <Link href="/" className={styles.successLink}>
-              Mes porte-monnaie
-            </Link>
-          </p>
-        ) : null}
         {failure ? (
           <p className={styles.alert} role="alert">
             {failure}
@@ -221,11 +188,10 @@ export function WalletForm() {
               Inviter des membres
             </h3>
             <p className={styles.sectionHint}>
-              Cette étape est optionnelle. Vous pourrez aussi inviter des membres plus
-              tard.
+              Cette étape est optionnelle. Les adresses saisies ne seront pas invitées
+              pour le moment; vous pourrez ajouter des membres plus tard.
             </p>
             <MemberInvites
-                key={invitesKey}
                 emails={invitedEmails}
                 onChange={setInvitedEmails}
                 disabled={submitting}
